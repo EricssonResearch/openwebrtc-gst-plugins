@@ -1,0 +1,8 @@
+This git is currently ongoing build-related changes. We are moving from a build environment where all plugins are build as separate projects
+into a autotools build which builds all plugins at the same go. Therefore there are files that still exists in this git but that are to be
+considered as obsolete. Such files includes, but might nog be restricted to, build files such as build-android.sh etc. in respective projects.
+
+The new build uses build.sh and setup-env.sh in the root folder as well as configure.ac in the root folder. Then Makefile.am's are used in
+all different projects to create Makefiles.
+
+In the long run this should be fixed so that openwebrtc-gst-plugins is a autotool build and nothing else.

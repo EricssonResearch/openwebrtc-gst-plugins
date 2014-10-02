@@ -42,8 +42,8 @@ PKG_CHECK_MODULES(GST, [
   AC_MSG_ERROR([
       You need to install or upgrade the GStreamer development
       packages on your system. On debian-based systems these are
-      libgstreamer0.10-dev and libgstreamer-plugins-base0.10-dev.
-      on RPM-based systems gstreamer0.10-devel, libgstreamer0.10-devel
+      libgstreamer1.0-dev and libgstreamer-plugins-base1.0-dev.
+      on RPM-based systems gstreamer1-devel, libgstreamer1-devel
       or similar. The minimum version required is $GST_REQUIRED.
   ])
 ])

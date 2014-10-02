@@ -5,14 +5,14 @@ AC_PREREQ([2.68])
 AC_INIT([openwebrtc-gst-plugins],[0.10.0])
 
 dnl required versions of gstreamer and plugins-base
-GST_REQUIRED=0.10.16
-GSTPB_REQUIRED=0.10.16
+GST_REQUIRED=1.0
+GSTPB_REQUIRED=1.0
 
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
 
 dnl required version of automake
-AM_INIT_AUTOMAKE([1.10 foreign])
+AM_INIT_AUTOMAKE([1.10 foreign subdir-objects])
 
 dnl enable mainainer mode by default
 AM_MAINTAINER_MODE([enable])
@@ -34,7 +34,6 @@ PKG_CHECK_MODULES(GST, [
   gstreamer-base-1.0 >= $GST_REQUIRED
   gstreamer-controller-1.0 >= $GST_REQUIRED
   gstreamer-video-1.0 >= $GST_REQUIRED
-  gstreamer-basevideo-1.0 >= $GST_REQUIRED
 ], [
   AC_SUBST(GST_CFLAGS)
   AC_SUBST(GST_OBJCFLAGS)

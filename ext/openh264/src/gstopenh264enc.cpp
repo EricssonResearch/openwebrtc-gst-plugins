@@ -34,9 +34,9 @@
 #include <gst/video/gstvideoencoder.h>
 #include <string.h>
 
-#include "codec_api.h"
-#include "codec_app_def.h"
-#include "codec_def.h"
+#include <wels/codec_api.h>
+#include <wels/codec_app_def.h>
+#include <wels/codec_def.h>
 
 #define GST_OPENH264ENC_GET_PRIVATE(obj) \
     (G_TYPE_INSTANCE_GET_PRIVATE((obj), GST_TYPE_OPENH264ENC, GstOpenh264EncPrivate))

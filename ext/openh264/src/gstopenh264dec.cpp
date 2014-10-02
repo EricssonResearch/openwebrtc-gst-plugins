@@ -27,9 +27,9 @@
 #include "config.h"
 #endif
 
-#include "codec_api.h"
-#include "codec_app_def.h"
-#include "codec_def.h"
+#include <wels/codec_api.h>
+#include <wels/codec_app_def.h>
+#include <wels/codec_def.h>
 
 #include "gstopenh264dec.h"
 #include <gst/gst.h>

@@ -67,13 +67,22 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([ ], [ ])], [
 ])
 
 dnl openh264 support?
-AC_MSG_CHECKING([whether to build openh264 plugins or not])
 AC_ARG_WITH([openh264],
   [AS_HELP_STRING([--with-openh264],
     [build openh264 plugins @<:@default=check@:>@])],
   [],
   [with_openh264=check])
+if test "x$with_openh264" = "xcheck"; then
+  AC_CHECK_HEADERS([wels/codec_api.h],
+    [AC_CHECK_LIB([openh264], [WelsSnprintf],
+      [with_openh264="yes"; OPENH264_LIBS="-lopenh264"],
+      [with_openh264="no"]
+    )],
+    [with_openh264="no"])
+fi
+AC_MSG_CHECKING([whether to build openh264 plugins or not])
 AC_MSG_RESULT($with_openh264)
+AC_SUBST(OPENH264_LIBS)
 AM_CONDITIONAL([BUILD_OPENH264], [test "$with_openh264" != no])
 AM_COND_IF([BUILD_OPENH264],
    AC_CONFIG_FILES([ext/openh264/Makefile ext/openh264/src/Makefile]))

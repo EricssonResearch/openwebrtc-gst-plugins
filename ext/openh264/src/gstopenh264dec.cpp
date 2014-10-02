@@ -203,7 +203,7 @@ static gboolean gst_openh264dec_stop(GstVideoDecoder *decoder)
     WelsDestroyDecoder(openh264dec->priv->decoder);
     openh264dec->priv->decoder = NULL;
 
-    return TRUE;
+    return ret;
 }
 
 static gboolean gst_openh264dec_set_format(GstVideoDecoder *decoder, GstVideoCodecState *state)
@@ -218,7 +218,7 @@ static gboolean gst_openh264dec_set_format(GstVideoDecoder *decoder, GstVideoCod
     gsize pps_len = 0, sps_len = 0;
     gint ret;
 
-    GST_DEBUG_OBJECT(openh264dec, "openh264_dec_set_format called, caps: %s" GST_PTR_FORMAT, state->caps);
+    GST_DEBUG_OBJECT(openh264dec, "openh264_dec_set_format called, caps: %" GST_PTR_FORMAT, state->caps);
 
     caps_data = gst_caps_get_structure(state->caps, 0);
     sprop_parameter_sets = gst_structure_get_string(caps_data, "sprop-parameter-sets");
@@ -278,8 +278,6 @@ static GstFlowReturn gst_openh264dec_handle_frame(GstVideoDecoder *decoder, GstV
     GstH264ParserResult parser_result;
     GstH264NalUnit nalu;
     GstH264SPS sps;
-    guchar* src_buf;
-    gint size;
     DECODING_STATE ret;
     guchar *yuvdata[3];
     GstFlowReturn flow_status;
@@ -324,8 +322,8 @@ static GstFlowReturn gst_openh264dec_handle_frame(GstVideoDecoder *decoder, GstV
             gst_pad_push_event(GST_VIDEO_DECODER_SINK_PAD(decoder),
                                gst_video_event_new_upstream_force_key_unit(GST_CLOCK_TIME_NONE, FALSE, 0));
             GST_LOG_OBJECT(openh264dec, "error decoding nal, return code: %d", ret);
-            GST_LOG_OBJECT(openh264dec, "nal first byte: %u", (guint) src_buf[0]);
-            GST_LOG_OBJECT(openh264dec, "nal size: %u", size);
+            GST_LOG_OBJECT(openh264dec, "nal first byte: %u", (guint) nalu.data[0]);
+            GST_LOG_OBJECT(openh264dec, "nal size: %u", nalu.size);
         }
 
         if (nalu.type == GST_H264_NAL_SPS) {

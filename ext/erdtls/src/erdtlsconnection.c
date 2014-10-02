@@ -484,7 +484,7 @@ static gpointer connection_timeout_thread_func(ErDtlsConnection *self)
                 log_state(self, "handling timeout after poll");
             }
         } else {
-            LOG_DEBUG(self, "waiting indefinitely", wait_time);
+            LOG_DEBUG(self, "waiting indefinitely");
 
             priv->timeout_set = FALSE;
 

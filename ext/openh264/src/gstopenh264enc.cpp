@@ -421,7 +421,6 @@ static gboolean gst_openh264enc_set_format(GstVideoEncoder *encoder, GstVideoCod
     GstOpenh264EncPrivate *priv = openh264enc->priv;
     gchar *debug_caps;
     SFrameBSInfo bsInfo;
-    GstVideoFormat format;
     guint width, height, fps_n, fps_d, par_n, par_d;
     SEncParamExt enc_params;
     gint ret;
@@ -447,7 +446,6 @@ static gboolean gst_openh264enc_set_format(GstVideoEncoder *encoder, GstVideoCod
     }
     priv->input_state = gst_video_codec_state_ref(state);
 
-    format = GST_VIDEO_INFO_FORMAT(&state->info);
     width = GST_VIDEO_INFO_WIDTH(&state->info);
     height = GST_VIDEO_INFO_HEIGHT(&state->info);
     fps_n = GST_VIDEO_INFO_FPS_N(&state->info);

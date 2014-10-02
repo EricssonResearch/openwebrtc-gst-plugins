@@ -1,7 +1,7 @@
-GStreamer plugins used by OpenWebRTC
-====================================
+OpenWebRTC specific GStreamer plugins
+=====================================
 
-The OpenWebRTC-specific GStreamer plugins in this repository are:
+Plugins in this repository:
 
 * *ercolorspace* - ARM optimised color space converter
 * *openh264* - [OpenH264](http://www.openh264.org) decoder and encoder

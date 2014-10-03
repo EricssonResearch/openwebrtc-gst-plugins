@@ -81,7 +81,7 @@ struct _GstOpenh264DecPrivate
 static GstStaticPadTemplate gst_openh264dec_sink_template = GST_STATIC_PAD_TEMPLATE("sink",
     GST_PAD_SINK,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS("video/x-h264, stream-format=(string)byte-stream, alignment=(string)au"));
+    GST_STATIC_CAPS("video/x-h264, stream-format=(string)byte-stream, alignment=(string)au,profile=(string){constrained-baseline,baseline}"));
 
 static GstStaticPadTemplate gst_openh264dec_src_template = GST_STATIC_PAD_TEMPLATE("src",
     GST_PAD_SRC,
@@ -228,32 +228,6 @@ static gboolean gst_openh264dec_reset(GstVideoDecoder *decoder, gboolean hard)
     return TRUE;
 }
 
-static GstVideoCodecFrame *
-get_oldest_pts_frame (GstVideoDecoder * decoder)
-{
-  GList *frames, *l;
-  GstVideoCodecFrame *oldest = NULL;
-
-  frames = gst_video_decoder_get_frames (decoder);
-  for (l = frames; l; l = l->next) {
-    GstVideoCodecFrame *tmp = (GstVideoCodecFrame *) l->data;
-
-    if (tmp->pts != GST_CLOCK_TIME_NONE &&
-        (oldest == NULL || oldest->pts > tmp->pts))
-      oldest = tmp;
-  }
-
-  if (oldest)
-    gst_video_codec_frame_ref (oldest);
-  else
-    oldest = gst_video_decoder_get_oldest_frame (decoder);
-
-  g_list_foreach (frames, (GFunc) gst_video_codec_frame_unref, NULL);
-  g_list_free (frames);
-
-  return oldest;
-}
-
 static GstFlowReturn gst_openh264dec_handle_frame(GstVideoDecoder *decoder, GstVideoCodecFrame *frame)
 {
     GstOpenh264Dec *openh264dec = GST_OPENH264DEC(decoder);
@@ -305,8 +279,9 @@ static GstFlowReturn gst_openh264dec_handle_frame(GstVideoDecoder *decoder, GstV
 
     /* FIXME: openh264 has no way for us to get a connection
      * between the input and output frames, we just have to
-     * guess based on the input */
-    frame = get_oldest_pts_frame (decoder);
+     * guess based on the input. Fortunately openh264 can
+     * only do baseline profile. */
+    frame = gst_video_decoder_get_oldest_frame (decoder);
     if (!frame) {
       /* Can only happen in finish() */
       return GST_FLOW_EOS;

@@ -314,7 +314,7 @@ static GstFlowReturn gst_openh264dec_handle_frame(GstVideoDecoder *decoder, GstV
 
     /* No output available yet */
     if (dst_buf_info.iBufferStatus != 1) {
-        return GST_FLOW_OK;
+        return (frame ? GST_FLOW_OK : GST_FLOW_EOS);
     }
 
     actual_width  = dst_buf_info.UsrData.sSystemBuffer.iWidth;

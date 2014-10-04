@@ -87,6 +87,18 @@ AM_CONDITIONAL([BUILD_OPENH264], [test "$with_openh264" != no])
 AM_COND_IF([BUILD_OPENH264],
    AC_CONFIG_FILES([ext/openh264/Makefile ext/openh264/src/Makefile]))
 
+AC_CHECK_HEADERS([openssl/ssl.h],
+  [AC_CHECK_LIB([ssl], [SSL_library_init],
+    [with_openssl="yes"; OPENSSL_LIBS="-lssl"],
+    [with_openssl="no"]
+  )],[with_openssl="no"]
+)
+AC_SUBST(OPENSSL_LIBS)
+
+if test "x$with_openssl" != "xyes"; then
+  AC_MSG_ERROR([You need OpenSSL for the build])
+fi
+
 dnl build static plugins or not
 AC_MSG_CHECKING([whether to build static plugins or not])
 AC_ARG_ENABLE(

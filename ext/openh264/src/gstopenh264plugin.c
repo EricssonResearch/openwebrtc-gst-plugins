@@ -38,8 +38,8 @@
 static gboolean
 plugin_init(GstPlugin *plugin)
 {
-    gst_element_register(plugin, "openh264dec", GST_RANK_NONE, GST_TYPE_OPENH264DEC);
-    gst_element_register(plugin, "openh264enc", GST_RANK_NONE, GST_TYPE_OPENH264ENC);
+    gst_element_register(plugin, "openh264dec", GST_RANK_MARGINAL, GST_TYPE_OPENH264DEC);
+    gst_element_register(plugin, "openh264enc", GST_RANK_MARGINAL, GST_TYPE_OPENH264ENC);
 
     return TRUE;
 }

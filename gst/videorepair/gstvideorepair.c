@@ -128,10 +128,12 @@ static void gst_videorepair_init(GstVideoRepair *videorepair)
         GST_DEBUG_FUNCPTR(gst_videorepair_sink_chain));
     gst_pad_set_event_function(videorepair->sinkpad,
         GST_DEBUG_FUNCPTR(gst_videorepair_sink_event));
+    GST_PAD_SET_PROXY_CAPS(videorepair->sinkpad);
     gst_element_add_pad(GST_ELEMENT(videorepair), videorepair->sinkpad);
 
     videorepair->srcpad = gst_pad_new_from_static_template(
         &gst_videorepair_src_template, "src");
+    GST_PAD_SET_PROXY_CAPS(videorepair->srcpad);
     gst_element_add_pad(GST_ELEMENT(videorepair), videorepair->srcpad);
 
     videorepair->needs_intra = TRUE;
@@ -183,15 +185,9 @@ void gst_videorepair_get_property(GObject *object, guint property_id,
 static gboolean gst_videorepair_sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 {
     GstVideoRepair *videorepair = GST_VIDEOREPAIR(parent);
-    GstCaps *caps;
     gboolean ret;
 
     switch (GST_EVENT_TYPE(event)) {
-    case GST_EVENT_CAPS:
-        gst_event_parse_caps(event, &caps);
-        ret = gst_pad_set_caps(videorepair->srcpad, caps);
-        break;
-
     case GST_EVENT_GAP:
         GST_INFO_OBJECT(videorepair, "got GAP event");
         gst_pad_push_event(videorepair->sinkpad,

@@ -70,16 +70,14 @@ static GstStaticPadTemplate gst_videorepair_sink_template =
 GST_STATIC_PAD_TEMPLATE("sink",
     GST_PAD_SINK,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS("video/x-h264, stream-format=(string)\"byte-stream\", alignment=(string)\"nal\";"
-                    "video/x-vp8")
+    GST_STATIC_CAPS("video/x-h264; video/x-vp8")
     );
 
 static GstStaticPadTemplate gst_videorepair_src_template =
 GST_STATIC_PAD_TEMPLATE("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS("video/x-h264, stream-format=(string)\"byte-stream\", alignment=(string)\"nal\";"
-                    "video/x-vp8")
+    GST_STATIC_CAPS("video/x-h264; video/x-vp8")
     );
 
 

@@ -42,6 +42,7 @@ static void gst_videorepair_set_property(GObject *object, guint property_id,
 static void gst_videorepair_get_property(GObject *object, guint property_id,
     GValue *value, GParamSpec *pspec);
 
+static GstStateChangeReturn gst_videorepair_change_state(GstElement *element, GstStateChange transition);
 static gboolean gst_videorepair_sink_event(GstPad *pad, GstObject *parent, GstEvent *event);
 static GstFlowReturn gst_videorepair_sink_chain(GstPad *pad, GstObject *parent, GstBuffer *buffer);
 
@@ -83,6 +84,7 @@ GST_STATIC_PAD_TEMPLATE("src",
 
 /* class initialization */
 
+#define gst_videorepair_parent_class parent_class
 G_DEFINE_TYPE_WITH_CODE(GstVideoRepair, gst_videorepair, GST_TYPE_ELEMENT,
     GST_DEBUG_CATEGORY_INIT(gst_videorepair_debug_category, "videorepair", 0,
     "debug category for videorepair element"));
@@ -105,6 +107,8 @@ static void gst_videorepair_class_init(GstVideoRepairClass *klass)
     gobject_class->set_property = GST_DEBUG_FUNCPTR(gst_videorepair_set_property);
     gobject_class->get_property = GST_DEBUG_FUNCPTR(gst_videorepair_get_property);
 
+    element_class->change_state = GST_DEBUG_FUNCPTR(gst_videorepair_change_state);
+
     obj_properties[PROP_DROP_UNTIL_INTRA] = g_param_spec_boolean("drop-until-intra",
         "Drop until intra",
         "Drop buffers until an intra picture arrives when there was a GAP",
@@ -118,6 +122,12 @@ static void gst_videorepair_class_init(GstVideoRepairClass *klass)
         G_PARAM_STATIC_STRINGS | G_PARAM_READWRITE);
 
     g_object_class_install_properties(gobject_class, NUM_PROPERTIES, obj_properties);
+}
+
+static void gst_videorepair_reset(GstVideoRepair *videorepair)
+{
+    videorepair->needs_intra = TRUE;
+    videorepair->drop_count = 0;
 }
 
 static void gst_videorepair_init(GstVideoRepair *videorepair)
@@ -136,10 +146,10 @@ static void gst_videorepair_init(GstVideoRepair *videorepair)
     GST_PAD_SET_PROXY_CAPS(videorepair->srcpad);
     gst_element_add_pad(GST_ELEMENT(videorepair), videorepair->srcpad);
 
-    videorepair->needs_intra = TRUE;
     videorepair->drop_until_intra = DEFAULT_DROP_UNTIL_INTRA;
     videorepair->retry_interval = DEFAULT_RETRY_INTERVAL;
-    videorepair->drop_count = 0;
+
+    gst_videorepair_reset(videorepair);
 }
 
 void gst_videorepair_set_property(GObject *object, guint property_id,
@@ -180,6 +190,28 @@ void gst_videorepair_get_property(GObject *object, guint property_id,
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
         break;
     }
+}
+
+static GstStateChangeReturn gst_videorepair_change_state(GstElement *element, GstStateChange transition)
+{
+    GstVideoRepair *videorepair = GST_VIDEOREPAIR(element);
+    GstStateChangeReturn ret;
+
+    /* We don't need to do anything for upward transitions */
+    ret = GST_ELEMENT_CLASS(parent_class)->change_state(element, transition);
+    if (ret != GST_STATE_CHANGE_SUCCESS)
+        return ret;
+
+    switch (transition) {
+    case GST_STATE_CHANGE_PAUSED_TO_READY:
+        gst_videorepair_reset(videorepair);
+        break;
+
+    default:
+        break;
+    }
+
+    return GST_STATE_CHANGE_SUCCESS;
 }
 
 static gboolean gst_videorepair_sink_event(GstPad *pad, GstObject *parent, GstEvent *event)

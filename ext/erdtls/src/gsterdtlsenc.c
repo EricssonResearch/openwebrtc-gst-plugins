@@ -351,6 +351,7 @@ static gboolean src_activate_mode(GstPad *pad, GstErDtlsEnc *self, GstPadMode mo
     if (active) {
         GST_DEBUG_OBJECT(self, "src pad activating in push mode");
 
+        self->send_initial_events = TRUE;
         success = gst_pad_start_task(pad, (GstTaskFunction) src_task_loop, self->src, NULL);
         if (!success) {
             GST_WARNING_OBJECT(self, "failed to activate pad task");
@@ -405,6 +406,21 @@ static void src_task_loop(GstPad *pad)
 
     if (peer_is_active) {
         GstBuffer *buffer;
+
+        if (self->send_initial_events) {
+          GstSegment segment;
+          gchar s_id[32];
+          GstCaps *caps;
+
+          g_snprintf (s_id, sizeof (s_id), "erdtlsenc-%08x", g_random_int ());
+          gst_pad_push_event (self->src, gst_event_new_stream_start (s_id));
+          caps = gst_caps_new_empty_simple ("application/x-dtls");
+          gst_pad_push_event (self->src, gst_event_new_caps (caps));
+          gst_caps_unref (caps);
+          gst_segment_init (&segment, GST_FORMAT_BYTES);
+          gst_pad_push_event (self->src, gst_event_new_segment (&segment));
+          self->send_initial_events = FALSE;
+        }
 
         buffer = g_ptr_array_remove_index(self->queue, 0);
 

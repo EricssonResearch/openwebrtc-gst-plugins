@@ -59,6 +59,8 @@ struct _GstErDtlsEnc {
     GstBuffer *encoder_key;
     guint srtp_cipher;
     guint srtp_auth;
+
+    gboolean send_initial_events;
 };
 
 struct _GstErDtlsEncClass {

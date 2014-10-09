@@ -104,8 +104,8 @@ static void gst_videorepair_class_init(GstVideoRepairClass *klass)
         "Requests intra pictures on GAP events and (optionally) drops buffers until they arrive",
         "Ericsson AB, http://www.ericsson.com");
 
-    gobject_class->set_property = GST_DEBUG_FUNCPTR(gst_videorepair_set_property);
-    gobject_class->get_property = GST_DEBUG_FUNCPTR(gst_videorepair_get_property);
+    gobject_class->set_property = gst_videorepair_set_property;
+    gobject_class->get_property = gst_videorepair_get_property;
 
     element_class->change_state = GST_DEBUG_FUNCPTR(gst_videorepair_change_state);
 

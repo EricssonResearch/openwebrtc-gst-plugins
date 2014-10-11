@@ -424,16 +424,16 @@ loop_nv21_bgr:
 
 /* set up source data*/
 vld1.u8         {d0}, [r0], r4          /*load src data Y*/
-vld1.u8         {d1}, [r1], r4          /*load src data UV, [v1 u1 v2 u2 v3 u3 v4 u4] */
+vld1.u8         {d1}, [r1], r4          /*load src data VU, [u1 v1 u2 v2 u3 v3 u4 v4] */
 
-vshr.u16        d28, d1, #8             /*shift down V, [0 v1 0 v2 0 v3 0 v4]*/
-vshl.u16        d29, d1, #8             /*shift up U, [u1 0 u2 0 u3 0 u4 0]*/
+vshr.u16        d28, d1, #8             /*shift down U, [0 u1 0 u2 0 u3 0 u4]*/
+vshl.u16        d29, d1, #8             /*shift up V, [v1 0 v2 0 v3 0 v4 0]*/
 
-vshl.u16        d30, d28, #8            /*shift up V, [v1 0 v2 0 v3 0 v4 0]*/
-vshr.u16        d31, d29, #8            /*shift down U, [0 u1 0 u2 0 u3 0 u4]*/
+vshl.u16        d30, d28, #8            /*shift up U, [u1 0 u2 0 u3 0 u4 0]*/
+vshr.u16        d31, d29, #8            /*shift down V, [0 v1 0 v2 0 v3 0 v4]*/
 
-vadd.u8         d1, d28, d30            /*add V, [v1 v1 v2 v2 v3 v3 v4 v4]*/
-vadd.u8         d2, d29, d31            /*add U, [u1 u1 u2 u2 u3 u3 u4 u4]*/
+vadd.u8         d2, d28, d30            /*add U, [u1 u1 u2 u2 u3 u3 u4 u4]*/
+vadd.u8         d1, d29, d31            /*add V, [v1 v1 v2 v2 v3 v3 v4 v4]*/
 
 /* R channel*/
 vmovl.u8        q2, d0

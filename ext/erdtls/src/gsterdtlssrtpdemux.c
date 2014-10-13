@@ -111,6 +111,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstObject *parent, GstBuffer *buffe
 
     if (gst_buffer_get_size(buffer) == 0) {
         GST_LOG_OBJECT(self, "received buffer with size 0");
+        gst_buffer_unref(buffer);
         return GST_FLOW_OK;
     }
 
@@ -133,5 +134,6 @@ static GstFlowReturn sink_chain(GstPad *pad, GstObject *parent, GstBuffer *buffe
     }
 
     GST_WARNING_OBJECT(self, "received invalid buffer: %x", first_byte);
+    gst_buffer_unref(buffer);
     return GST_FLOW_OK;
 }

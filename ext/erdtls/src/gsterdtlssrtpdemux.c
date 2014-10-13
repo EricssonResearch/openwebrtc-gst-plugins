@@ -107,21 +107,16 @@ static void gst_er_dtls_srtp_demux_init(GstErDtlsSrtpDemux *self)
 static GstFlowReturn sink_chain(GstPad *pad, GstObject *parent, GstBuffer *buffer)
 {
     GstErDtlsSrtpDemux *self = GST_ER_DTLS_SRTP_DEMUX(parent);
-    GstMapInfo map_info = GST_MAP_INFO_INIT;
     guint8 first_byte;
-    gsize size;
 
-    if (!gst_buffer_map_range(buffer, 0, 1, &map_info, GST_MAP_READ)) {
-        GST_WARNING_OBJECT(self, "could not map buffer");
+    if (gst_buffer_get_size(buffer) == 0) {
+        GST_LOG_OBJECT(self, "received buffer with size 0");
+        return GST_FLOW_OK;
     }
 
-    first_byte = map_info.data[0];
-    size = map_info.size;
-
-    gst_buffer_unmap(buffer, &map_info);
-
-    if (!size) {
-        GST_LOG_OBJECT(self, "received buffer with size 0");
+    if (gst_buffer_extract(buffer, 0, &first_byte, 1) != 1) {
+        GST_WARNING_OBJECT(self, "could not extract first byte from buffer");
+        gst_buffer_unref(buffer);
         return GST_FLOW_OK;
     }
 

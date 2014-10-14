@@ -459,7 +459,7 @@ static gpointer connection_timeout_thread_func(ErDtlsConnection *self)
             wait_time = timeout.tv_sec * G_USEC_PER_SEC + timeout.tv_usec;
 
             if (wait_time) {
-                LOG_DEBUG(self, "waiting for %ld usec", wait_time);
+                LOG_DEBUG(self, "waiting for %" G_GINT64_FORMAT " usec", wait_time);
 
                 end_time = g_get_monotonic_time() + wait_time;
 

@@ -68,15 +68,11 @@ static void er_dtls_agent_finalize(GObject *gobject);
 static void er_dtls_agent_set_property(GObject *, guint prop_id, const GValue *, GParamSpec *);
 const gchar *er_dtls_agent_peek_id(ErDtlsAgent *);
 
-G_LOCK_DEFINE_STATIC(openssl_init);
-
 void _er_dtls_init_openssl()
 {
-    static gboolean is_init = FALSE;
+    static gsize is_init = 0;
 
-    G_LOCK(openssl_init);
-
-    if (!is_init) {
+    if (g_once_init_enter(&is_init)) {
         if (OPENSSL_VERSION_NUMBER < 0x1000100fL) {
             LOG_WARNING(NULL, "Incorrect OpenSSL version, should be >= 1.0.1, is %s", OPENSSL_VERSION_TEXT);
             g_assert_not_reached();
@@ -87,10 +83,8 @@ void _er_dtls_init_openssl()
         SSL_load_error_strings();
         ERR_load_BIO_strings();
 
-        is_init = TRUE;
+        g_once_init_leave(&is_init, 1);
     }
-
-    G_UNLOCK(openssl_init);
 }
 
 static void er_dtls_agent_class_init(ErDtlsAgentClass *klass)

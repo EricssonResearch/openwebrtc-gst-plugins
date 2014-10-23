@@ -195,6 +195,7 @@ static void gst_er_dtls_srtp_dec_init(GstErDtlsSrtpDec *self)
     templ = gst_element_class_get_pad_template(klass, "rtp_src");
     target_pad = gst_element_get_static_pad(self->funnel, "src");
     ghost_pad = gst_ghost_pad_new_from_template("rtp_src", target_pad, templ);
+    gst_object_unref(target_pad);
     g_return_if_fail(ghost_pad);
 
     ret = gst_element_add_pad(GST_ELEMENT(self), ghost_pad);
@@ -203,6 +204,7 @@ static void gst_er_dtls_srtp_dec_init(GstErDtlsSrtpDec *self)
     templ = gst_element_class_get_pad_template(klass, "sink");
     target_pad = gst_element_get_static_pad(self->dtls_srtp_demux, "sink");
     ghost_pad = gst_ghost_pad_new_from_template("sink", target_pad, templ);
+    gst_object_unref(target_pad);
     g_return_if_fail(ghost_pad);
 
     ret = gst_element_add_pad(GST_ELEMENT(self), ghost_pad);
@@ -274,6 +276,7 @@ static GstPad *gst_er_dtls_srtp_dec_request_new_pad(GstElement *element,
         target_pad = gst_element_get_request_pad(self->bin.dtls_element, "src");
 
         ghost_pad = gst_ghost_pad_new_from_template(name, target_pad, templ);
+        gst_object_unref(target_pad);
         g_return_val_if_fail(ghost_pad, NULL);
 
         ret = gst_pad_set_active(ghost_pad, TRUE);

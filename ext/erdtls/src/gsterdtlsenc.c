@@ -88,10 +88,10 @@ static void gst_er_dtls_enc_get_property(GObject *, guint prop_id, GValue *, GPa
 static GstStateChangeReturn gst_er_dtls_enc_change_state(GstElement *, GstStateChange);
 static GstPad *gst_er_dtls_enc_request_new_pad(GstElement *, GstPadTemplate *, const gchar *name, const GstCaps *);
 
-static gboolean src_activate_mode(GstPad *, GstErDtlsEnc *, GstPadMode, gboolean active);
+static gboolean src_activate_mode(GstPad *, GstObject *, GstPadMode, gboolean active);
 static void src_task_loop(GstPad *);
 
-static GstFlowReturn sink_chain(GstPad *, GstErDtlsEnc *, GstBuffer *);
+static GstFlowReturn sink_chain(GstPad *, GstObject *, GstBuffer *);
 
 static void on_key_received(ErDtlsConnection *, gpointer key, guint cipher, guint auth, GstErDtlsEnc *);
 static void on_send_data(ErDtlsConnection *, gconstpointer data, gint length, GstErDtlsEnc *);
@@ -187,7 +187,7 @@ static void gst_er_dtls_enc_init(GstErDtlsEnc *self)
     self->src = gst_pad_new_from_static_template(&src_template, "src");
     g_return_if_fail(self->src);
 
-    gst_pad_set_activatemode_function(self->src, GST_DEBUG_FUNCPTR((GstPadActivateModeFunction) src_activate_mode));
+    gst_pad_set_activatemode_function(self->src, GST_DEBUG_FUNCPTR(src_activate_mode));
 
     gst_element_add_pad(GST_ELEMENT(self), self->src);
 }
@@ -333,7 +333,7 @@ static GstPad *gst_er_dtls_enc_request_new_pad(GstElement *element,
         g_object_set(sink, "caps", caps, NULL);
     }
 
-    gst_pad_set_chain_function(sink, GST_DEBUG_FUNCPTR((GstPadChainFunction) sink_chain));
+    gst_pad_set_chain_function(sink, GST_DEBUG_FUNCPTR(sink_chain));
 
     ret = gst_pad_set_active(sink, TRUE);
     g_warn_if_fail(ret);
@@ -343,8 +343,9 @@ static GstPad *gst_er_dtls_enc_request_new_pad(GstElement *element,
     return sink;
 }
 
-static gboolean src_activate_mode(GstPad *pad, GstErDtlsEnc *self, GstPadMode mode, gboolean active)
+static gboolean src_activate_mode(GstPad *pad, GstObject *parent, GstPadMode mode, gboolean active)
 {
+    GstErDtlsEnc *self = GST_ER_DTLS_ENC (parent);
     gboolean success = TRUE;
     g_return_val_if_fail(mode == GST_PAD_MODE_PUSH, FALSE);
 
@@ -443,8 +444,9 @@ static void src_task_loop(GstPad *pad)
     }
 }
 
-static GstFlowReturn sink_chain(GstPad *pad, GstErDtlsEnc *self, GstBuffer *buffer)
+static GstFlowReturn sink_chain(GstPad *pad, GstObject *parent, GstBuffer *buffer)
 {
+    GstErDtlsEnc *self = GST_ER_DTLS_ENC(parent);
     GstMapInfo map_info;
     gint ret;
 

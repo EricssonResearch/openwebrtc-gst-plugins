@@ -85,6 +85,7 @@ struct _ErDtlsConnectionClass {
 GType er_dtls_connection_get_type(void) G_GNUC_CONST;
 
 void er_dtls_connection_start(ErDtlsConnection *, gboolean is_client);
+void er_dtls_connection_start_timeout(ErDtlsConnection *);
 
 /*
  * Stops the connections, it is not required to call this function.

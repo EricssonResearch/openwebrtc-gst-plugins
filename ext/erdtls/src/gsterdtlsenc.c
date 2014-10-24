@@ -406,6 +406,7 @@ static void src_task_loop(GstPad *pad)
 
     if (peer_is_active) {
         GstBuffer *buffer;
+        gboolean start_connection_timeout = FALSE;
 
         if (self->send_initial_events) {
           GstSegment segment;
@@ -420,6 +421,7 @@ static void src_task_loop(GstPad *pad)
           gst_segment_init (&segment, GST_FORMAT_BYTES);
           gst_pad_push_event (self->src, gst_event_new_segment (&segment));
           self->send_initial_events = FALSE;
+          start_connection_timeout = TRUE;
         }
 
         buffer = g_ptr_array_remove_index(self->queue, 0);
@@ -428,6 +430,8 @@ static void src_task_loop(GstPad *pad)
         g_mutex_unlock(&self->queue_lock);
 
         ret = gst_pad_push(self->src, buffer);
+        if (start_connection_timeout)
+          er_dtls_connection_start_timeout (self->connection);
 
         if (G_UNLIKELY(ret != GST_FLOW_OK)) {
             GST_WARNING_OBJECT(self, "failed to push buffer on src pad: %s", gst_flow_get_name(ret));

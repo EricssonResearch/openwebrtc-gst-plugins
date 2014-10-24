@@ -257,23 +257,36 @@ void er_dtls_connection_start(ErDtlsConnection *self, gboolean is_client)
     openssl_poll(self);
 
     log_state(self, "first poll done");
+    priv->thread = NULL;
 
-    gchar *thread_name = g_strdup_printf("connection_thread_%p", self);
+    LOG_TRACE(self, "unlocking @ start");
+    g_mutex_unlock(&priv->mutex);
+}
+
+void er_dtls_connection_start_timeout(ErDtlsConnection *self)
+{
+    g_return_if_fail(ER_IS_DTLS_CONNECTION(self));
+
+    ErDtlsConnectionPrivate *priv = self->priv;
     GError *error = NULL;
+    gchar *thread_name = g_strdup_printf("connection_thread_%p", self);
 
+    LOG_TRACE(self, "locking @ start_timeout");
+    g_mutex_lock(&priv->mutex);
+    LOG_TRACE(self, "locked @ start_timeout");
+
+    LOG_INFO(self, "starting connection timeout");
     priv->thread = g_thread_try_new(thread_name,
-        (GThreadFunc) connection_timeout_thread_func, self, &error);
-
+            (GThreadFunc) connection_timeout_thread_func, self, &error);
     if (error) {
         LOG_WARNING(self, "error creating connection thread: %s (%d)",
-            error->message, error->code);
+                error->message, error->code);
         g_clear_error(&error);
     }
 
     g_free(thread_name);
-    thread_name = NULL;
 
-    LOG_TRACE(self, "unlocking @ start");
+    LOG_TRACE(self, "unlocking @ start_timeout");
     g_mutex_unlock(&priv->mutex);
 }
 

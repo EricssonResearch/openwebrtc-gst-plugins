@@ -332,7 +332,11 @@ void er_dtls_connection_close(ErDtlsConnection *self)
 
     LOG_TRACE(self, "unlocking @ close");
     g_mutex_unlock(&self->priv->mutex);
-    g_thread_join(self->priv->thread);
+
+    if (self->priv->thread) {
+        g_thread_join(self->priv->thread);
+        self->priv->thread = NULL;
+    }
 
     LOG_DEBUG(self, "closed connection");
 }

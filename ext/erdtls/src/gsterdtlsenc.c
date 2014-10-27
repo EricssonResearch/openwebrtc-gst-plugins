@@ -299,10 +299,10 @@ static GstStateChangeReturn gst_er_dtls_enc_change_state(GstElement *element, Gs
         break;
     case GST_STATE_CHANGE_READY_TO_NULL:
         GST_DEBUG_OBJECT(self, "closing connection %s", self->connection_id);
-        er_dtls_connection_close(self->connection);
-        er_dtls_connection_set_send_callback(self->connection, NULL);
 
         if (self->connection) {
+            er_dtls_connection_close(self->connection);
+            er_dtls_connection_set_send_callback(self->connection, NULL);
             g_object_unref(self->connection);
             self->connection = NULL;
         }

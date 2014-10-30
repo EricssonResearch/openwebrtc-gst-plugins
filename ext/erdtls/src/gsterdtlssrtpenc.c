@@ -405,10 +405,9 @@ static void gst_er_dtls_srtp_enc_remove_dtls_element(GstErDtlsSrtpBin *bin)
     g_return_if_fail(id);
     bin->dtls_element = NULL;
 
-    gst_pad_push_event(peer_pad, gst_event_new_eos());
+    gst_pad_push_event(peer_pad, gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM, gst_structure_new_empty("dummy")));
 
     gst_object_unref(peer_pad);
-    peer_pad = NULL;
 }
 
 static GstPadProbeReturn remove_dtls_encoder_probe_callback(GstPad *pad,

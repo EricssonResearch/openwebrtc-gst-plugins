@@ -400,10 +400,9 @@ static void gst_er_dtls_srtp_dec_remove_dtls_element(GstErDtlsSrtpBin *bin)
     g_return_if_fail(id);
     bin->dtls_element = NULL;
 
-    gst_pad_push_event(demux_pad, gst_event_new_eos());
+    gst_pad_push_event(demux_pad, gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM, gst_structure_new_empty("dummy")));
 
     gst_object_unref(demux_pad);
-    demux_pad = NULL;
 }
 
 static GstPadProbeReturn remove_dtls_decoder_probe_callback(GstPad *pad,

@@ -89,6 +89,31 @@ gst_openh264enc_rc_modes_get_type (void)
     return rc_modes_type;
 }
 
+typedef enum _GstOpenh264encDeblockingMode {
+    GST_OPENH264_DEBLOCKING_ON = 0,
+    GST_OPENH264_DEBLOCKING_OFF = 1,
+    GST_OPENH264_DEBLOCKING_NOT_SLICE_BOUNDARIES = 2
+} GstOpenh264encDeblockingMode;
+
+#define GST_TYPE_OPENH264ENC_DEBLOCKING_MODE (gst_openh264enc_deblocking_mode_get_type ())
+static GType gst_openh264enc_deblocking_mode_get_type(void)
+{
+    static const GEnumValue types[] = {
+        { GST_OPENH264_DEBLOCKING_ON, "Deblocking on", "on" },
+        { GST_OPENH264_DEBLOCKING_OFF, "Deblocking off", "off" },
+        { GST_OPENH264_DEBLOCKING_NOT_SLICE_BOUNDARIES, "Deblocking on, except for slice boundaries", "not-slice-boundaries" },
+        { 0, NULL, NULL },
+    };
+    static volatile GType id = 0;
+
+    if (g_once_init_enter((gsize *)&id)) {
+        GType _id = g_enum_register_static("GstOpenh264encDeblockingModes", types);
+        g_once_init_leave((gsize *)&id, _id);
+    }
+
+    return id;
+}
+
 /* prototypes */
 
 static void gst_openh264enc_set_property(GObject *object,
@@ -116,6 +141,7 @@ static void gst_openh264enc_set_rate_control (GstOpenh264Enc *openh264enc, gint 
 #define DEFAULT_RATE_CONTROL    RC_QUALITY_MODE
 #define DEFAULT_MULTI_THREAD    0
 #define DEFAULT_ENABLE_DENOISE  FALSE
+#define DEFAULT_DEBLOCKING_MODE GST_OPENH264_DEBLOCKING_ON
 
 enum
 {
@@ -127,6 +153,7 @@ enum
     PROP_RATE_CONTROL,
     PROP_MULTI_THREAD,
     PROP_ENABLE_DENOISE,
+    PROP_DEBLOCKING_MODE,
     N_PROPERTIES
 };
 
@@ -146,6 +173,7 @@ struct _GstOpenh264EncPrivate
     guint64 time_per_frame;
     guint64 frame_count;
     guint64 previous_timestamp;
+    GstOpenh264encDeblockingMode deblocking_mode;
 };
 
 /* pad templates */
@@ -236,6 +264,11 @@ static void gst_openh264enc_class_init(GstOpenh264EncClass *klass)
         "The maximum size of one slice (in bytes).",
         0, G_MAXUINT, DEFAULT_MAX_SLICE_SIZE,
         (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property (G_OBJECT_CLASS (klass), PROP_DEBLOCKING_MODE,
+        g_param_spec_enum ("deblocking", "Deblocking mode", "Deblocking mode",
+        GST_TYPE_OPENH264ENC_DEBLOCKING_MODE, DEFAULT_DEBLOCKING_MODE,
+        (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 }
 
 static void gst_openh264enc_init(GstOpenh264Enc *openh264enc)
@@ -254,6 +287,7 @@ static void gst_openh264enc_init(GstOpenh264Enc *openh264enc)
     openh264enc->priv->previous_timestamp = 0;
     openh264enc->priv->drop_bitrate = DROP_BITRATE;
     openh264enc->priv->enable_denoise = DEFAULT_ENABLE_DENOISE;
+    openh264enc->priv->deblocking_mode = DEFAULT_DEBLOCKING_MODE;
     openh264enc->priv->encoder = NULL;
     gst_openh264enc_set_usage_type(openh264enc, CAMERA_VIDEO_REAL_TIME);
     gst_openh264enc_set_rate_control(openh264enc, RC_QUALITY_MODE);
@@ -331,6 +365,10 @@ void gst_openh264enc_set_property(GObject *object, guint property_id,
         openh264enc->priv->max_slice_size = g_value_get_uint(value);
         break;
 
+    case PROP_DEBLOCKING_MODE:
+        openh264enc->priv->deblocking_mode = (GstOpenh264encDeblockingMode)g_value_get_enum(value);
+        break;
+
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
         break;
@@ -370,6 +408,10 @@ void gst_openh264enc_get_property(GObject *object, guint property_id, GValue *va
 
     case PROP_MAX_SLICE_SIZE:
         g_value_set_uint(value, openh264enc->priv->max_slice_size);
+        break;
+
+    case PROP_DEBLOCKING_MODE:
+        g_value_set_enum(value, openh264enc->priv->deblocking_mode);
         break;
 
     default:
@@ -489,6 +531,7 @@ static gboolean gst_openh264enc_set_format(GstVideoEncoder *encoder, GstVideoCod
     enc_params.bEnableSpsPpsIdAddition = 1;
     enc_params.bPrefixNalAddingCtrl = 0;
     enc_params.fMaxFrameRate = fps_n * 1.0 / fps_d;
+    enc_params.iLoopFilterDisableIdc = openh264enc->priv->deblocking_mode;
     enc_params.sSpatialLayers[0].uiProfileIdc = PRO_BASELINE;
     enc_params.sSpatialLayers[0].iVideoWidth = width;
     enc_params.sSpatialLayers[0].iVideoHeight = height;

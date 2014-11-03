@@ -142,6 +142,9 @@ static void gst_openh264enc_set_rate_control (GstOpenh264Enc *openh264enc, gint 
 #define DEFAULT_MULTI_THREAD    0
 #define DEFAULT_ENABLE_DENOISE  FALSE
 #define DEFAULT_DEBLOCKING_MODE GST_OPENH264_DEBLOCKING_ON
+#define DEFAULT_BACKGROUND_DETECTION TRUE
+#define DEFAULT_ADAPTIVE_QUANTIZATION TRUE
+#define DEFAULT_SCENE_CHANGE_DETECTION TRUE
 
 enum
 {
@@ -154,6 +157,9 @@ enum
     PROP_MULTI_THREAD,
     PROP_ENABLE_DENOISE,
     PROP_DEBLOCKING_MODE,
+    PROP_BACKGROUND_DETECTION,
+    PROP_ADAPTIVE_QUANTIZATION,
+    PROP_SCENE_CHANGE_DETECTION,
     N_PROPERTIES
 };
 
@@ -174,6 +180,9 @@ struct _GstOpenh264EncPrivate
     guint64 frame_count;
     guint64 previous_timestamp;
     GstOpenh264encDeblockingMode deblocking_mode;
+    gboolean background_detection;
+    gboolean adaptive_quantization;
+    gboolean scene_change_detection;
 };
 
 /* pad templates */
@@ -269,6 +278,21 @@ static void gst_openh264enc_class_init(GstOpenh264EncClass *klass)
         g_param_spec_enum ("deblocking", "Deblocking mode", "Deblocking mode",
         GST_TYPE_OPENH264ENC_DEBLOCKING_MODE, DEFAULT_DEBLOCKING_MODE,
         (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property (gobject_class, PROP_BACKGROUND_DETECTION,
+        g_param_spec_boolean ("background-detection", "Background detection",
+        "Background detection", DEFAULT_BACKGROUND_DETECTION,
+        (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property (gobject_class, PROP_ADAPTIVE_QUANTIZATION,
+        g_param_spec_boolean ("adaptive-quantization", "Adaptive quantization",
+        "Adaptive quantization", DEFAULT_ADAPTIVE_QUANTIZATION,
+        (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property (gobject_class, PROP_SCENE_CHANGE_DETECTION,
+        g_param_spec_boolean ("scene-change-detection", "Scene change detection",
+        "Scene change detection", DEFAULT_SCENE_CHANGE_DETECTION,
+        (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 }
 
 static void gst_openh264enc_init(GstOpenh264Enc *openh264enc)
@@ -288,6 +312,9 @@ static void gst_openh264enc_init(GstOpenh264Enc *openh264enc)
     openh264enc->priv->drop_bitrate = DROP_BITRATE;
     openh264enc->priv->enable_denoise = DEFAULT_ENABLE_DENOISE;
     openh264enc->priv->deblocking_mode = DEFAULT_DEBLOCKING_MODE;
+    openh264enc->priv->background_detection = DEFAULT_BACKGROUND_DETECTION;
+    openh264enc->priv->adaptive_quantization = DEFAULT_ADAPTIVE_QUANTIZATION;
+    openh264enc->priv->scene_change_detection = DEFAULT_SCENE_CHANGE_DETECTION;
     openh264enc->priv->encoder = NULL;
     gst_openh264enc_set_usage_type(openh264enc, CAMERA_VIDEO_REAL_TIME);
     gst_openh264enc_set_rate_control(openh264enc, RC_QUALITY_MODE);
@@ -369,6 +396,18 @@ void gst_openh264enc_set_property(GObject *object, guint property_id,
         openh264enc->priv->deblocking_mode = (GstOpenh264encDeblockingMode)g_value_get_enum(value);
         break;
 
+    case PROP_BACKGROUND_DETECTION:
+        openh264enc->priv->background_detection = g_value_get_boolean(value);
+        break;
+
+    case PROP_ADAPTIVE_QUANTIZATION:
+        openh264enc->priv->adaptive_quantization = g_value_get_boolean(value);
+        break;
+
+    case PROP_SCENE_CHANGE_DETECTION:
+        openh264enc->priv->scene_change_detection = g_value_get_boolean(value);
+        break;
+
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
         break;
@@ -412,6 +451,18 @@ void gst_openh264enc_get_property(GObject *object, guint property_id, GValue *va
 
     case PROP_DEBLOCKING_MODE:
         g_value_set_enum(value, openh264enc->priv->deblocking_mode);
+        break;
+
+    case PROP_BACKGROUND_DETECTION:
+        g_value_set_boolean(value, openh264enc->priv->background_detection);
+        break;
+
+    case PROP_ADAPTIVE_QUANTIZATION:
+        g_value_set_boolean(value, openh264enc->priv->adaptive_quantization);
+        break;
+
+    case PROP_SCENE_CHANGE_DETECTION:
+        g_value_set_boolean(value, openh264enc->priv->scene_change_detection);
         break;
 
     default:
@@ -524,8 +575,9 @@ static gboolean gst_openh264enc_set_format(GstVideoEncoder *encoder, GstVideoCod
     enc_params.iMultipleThreadIdc = openh264enc->priv->multi_thread;
     enc_params.bEnableDenoise = openh264enc->priv->enable_denoise;
     enc_params.uiIntraPeriod = priv->gop_size;
-    enc_params.bEnableBackgroundDetection = 1;
-    enc_params.bEnableAdaptiveQuant = 1;
+    enc_params.bEnableBackgroundDetection = openh264enc->priv->background_detection;
+    enc_params.bEnableAdaptiveQuant = openh264enc->priv->adaptive_quantization;
+    enc_params.bEnableSceneChangeDetect = openh264enc->priv->scene_change_detection;
     enc_params.bEnableFrameSkip = 1;
     enc_params.bEnableLongTermReference = 0;
     enc_params.bEnableSpsPpsIdAddition = 1;

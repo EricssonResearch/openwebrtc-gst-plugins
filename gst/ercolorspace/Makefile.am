@@ -1,8 +1,12 @@
 plugin_LTLIBRARIES = libgstercolorspace.la
 
 libgstercolorspace_la_SOURCES = \
-	src/gstercolorspace.c \
+	src/gstercolorspace.c
+
+if BUILD_ERCOLORSPACE_NEON
+libgstercolorspace_la_SOURCES += \
 	src/gstercolorspace_neon.s
+endif
 
 libgstercolorspace_la_CFLAGS = $(GST_PLUGINS_BASE_CFLAGS) $(GST_BASE_CFLAGS) $(GST_CFLAGS)
 libgstercolorspace_la_LDFLAGS = $(GST_PLUGIN_LDFLAGS)

@@ -27,6 +27,8 @@ dnl required version of libtool
 LT_PREREQ([2.2.6])
 LT_INIT
 
+AC_CANONICAL_HOST
+
 dnl Check for the required version of GStreamer core (and gst-plugins-base)
 dnl This will export GST_CFLAGS and GST_LIBS variables for use in Makefile.am
 PKG_CHECK_MODULES(GST, [
@@ -223,6 +225,17 @@ AC_ARG_ENABLE(
   [enable_colorspace_converter=no])
 AC_MSG_RESULT([$enable_colorspace_converter])
 AM_CONDITIONAL(BUILD_ERCOLORSPACE, [ test "x$enable_colorspace_converter" = "xyes" ])
+if test "x$enable_colorspace_converter" = "xyes"; then
+    case $host in
+        arm*)
+          enable_colorspace_converter_neon="yes"
+        ;;
+        *)
+          enable_colorspace_converter_neon="no"
+        ;;
+    esac
+fi
+AM_CONDITIONAL(BUILD_ERCOLORSPACE_NEON, [ test "x$enable_colorspace_converter_neon" = "xyes" ])
 AM_COND_IF([BUILD_ERCOLORSPACE],
         AC_CONFIG_FILES([gst/ercolorspace/Makefile]))
 

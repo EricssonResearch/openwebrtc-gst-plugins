@@ -28,6 +28,9 @@
 #endif
 
 #include "gstercolorspace.h"
+
+#if defined(__arm__) && !defined(__arm64__)
+
 #include "gstercolorspace_neon.h"
 #include <stdio.h>
 #include <string.h>
@@ -346,6 +349,13 @@ ercolorspace_init (GstPlugin * ercolorspace)
   return gst_element_register (ercolorspace, "ercolorspace", GST_RANK_NONE,
       GST_TYPE_ERCOLORSPACE);
 }
+#else
+static gboolean
+ercolorspace_init (GstPlugin * ercolorspace)
+{
+  return TRUE;
+}
+#endif
 
 /* gstreamer looks for this structure to register ercolorspaces
  */

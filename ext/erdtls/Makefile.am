@@ -19,8 +19,9 @@ libgsterdtls_la_CFLAGS = \
     $(OPENSSL_CFLAGS) \
     -DER_DTLS_USE_GST_LOG=1
 
-if !GST_PLUGIN_BUILD_STATIC
 libgsterdtls_la_LIBADD = $(GST_LIBS) $(GST_BASE_LIBS) $(OPENSSL_LIBS)
+libgsterdtls_la_LDFLAGS = $(GST_PLUGIN_LDFLAGS)
+if !GST_PLUGIN_BUILD_STATIC
 libgsterdtls_la_LIBTOOLFLAGS = --tag=disable-static
 endif
 

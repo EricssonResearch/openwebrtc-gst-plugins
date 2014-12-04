@@ -20,7 +20,9 @@ libgstvideorepair_la_SOURCES = gstvideorepair.c
 libgstvideorepair_la_CFLAGS = $(GST_CFLAGS) $(GST_PLUGINS_BASE_CFLAGS) -Wall -Wextra -Werror
 libgstvideorepair_la_LIBADD = $(GST_LIBS) -lgstvideo-1.0
 libgstvideorepair_la_LDFLAGS = $(GST_PLUGIN_LDFLAGS)
-#libgstvideorepair_la_LIBTOOLFLAGS = --tag=disable-static
+if !GST_PLUGIN_BUILD_STATIC
+libgstvideorepair_la_LIBTOOLFLAGS = --tag=disable-static
+endif
 
 # headers we need but don't want installed
 noinst_HEADERS = gstvideorepair.h

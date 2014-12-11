@@ -1652,18 +1652,61 @@ int *VCD_getMediaSupportFmt(VCD_handle handle)
 }
 
 
+static int get_min_or_max_resolution(VCD_handle handle, int *p_minMaxWidth, int *p_minMaxHeight, int getMax)
+{
+    int i;
+    int minMaxWidth = -1;
+    int minMaxHeight = -1;
+    int sizeLen;
+
+    GA_LOGTRACE("ENTER %s --xx--> thread(%ld)", __FUNCTION__, pthread_self());
+
+    assert(p_minMaxWidth);
+    assert(p_minMaxHeight);
+
+    VCD_VideoCaptureDevice *p_obj = (VCD_VideoCaptureDevice*) handle;
+    assert(p_obj);
+
+    sizeLen = p_obj->m_camMediaSupport[gl_VCD_currentCameraIndex]->sizeLen;
+
+    // Let width be the "limiter". I.e. first find min/max width, then find min/max height for that width
+    for (i = 0; i < sizeLen; i++) {
+        int width = p_obj->m_camMediaSupport[gl_VCD_currentCameraIndex]->size[i][WIDTH_POS];
+        int height = p_obj->m_camMediaSupport[gl_VCD_currentCameraIndex]->size[i][HEIGHT_POS];
+        if (getMax ? width > minMaxWidth : (width < minMaxWidth || minMaxHeight < 0)) {
+            minMaxWidth = width;
+            minMaxHeight = height;
+        } else if (width == minMaxWidth) {
+            // More than one resolution with min/max width exists, find the min/max height for this width
+            if (getMax ? height > minMaxHeight : height < minMaxHeight) {
+                minMaxHeight = height;
+            }
+        }
+    }
+
+    GA_LOGTRACE("%s: Result: %dx%d", __FUNCTION__, minMaxWidth, minMaxHeight);
+
+    GA_LOGTRACE("EXIT %s", __FUNCTION__);
+
+    if (minMaxWidth < 0 || minMaxHeight < 0) {
+        return VCD_ERR_GENERAL;
+    }
+
+    *p_minMaxWidth = minMaxWidth;
+    *p_minMaxHeight = minMaxHeight;
+
+    GA_LOGTRACE("EXIT %s", __FUNCTION__);
+
+    return VCD_NO_ERROR;
+}
+
+
 //
 // VCD_GetMinResolution
 //
 int VCD_GetMinResolution(VCD_handle handle, int *p_minWidth, int *p_minHeight)
 {
-    assert(p_minWidth);
-    assert(p_minHeight);
-
-    *p_minWidth = 2;
-    *p_minHeight = 2;
-
-    return VCD_NO_ERROR;
+    return get_min_or_max_resolution(handle, p_minWidth, p_minHeight, FALSE);
 }
 
 
@@ -1672,48 +1715,7 @@ int VCD_GetMinResolution(VCD_handle handle, int *p_minWidth, int *p_minHeight)
 //
 int VCD_GetMaxResolution(VCD_handle handle, int *p_maxWidth, int *p_maxHeight)
 {
-    int i;
-    int maxWidth = -1;
-    int maxHeight = -1;
-    int sizeLen;
-
-    GA_LOGTRACE("ENTER %s --xx--> thread(%ld)", __FUNCTION__, pthread_self());
-
-    assert(p_maxWidth);
-    assert(p_maxHeight);
-
-    VCD_VideoCaptureDevice *p_obj = (VCD_VideoCaptureDevice*) handle;
-    assert(p_obj);
-
-    sizeLen = p_obj->m_camMediaSupport[gl_VCD_currentCameraIndex]->sizeLen;
-
-    // Let width be the "limiter". I.e. first find max width, then find max height for that width
-    for (i = 0; i < sizeLen; i++) {
-        int width = p_obj->m_camMediaSupport[gl_VCD_currentCameraIndex]->size[i][WIDTH_POS];
-        int height = p_obj->m_camMediaSupport[gl_VCD_currentCameraIndex]->size[i][HEIGHT_POS];
-        if (width > maxWidth) {
-            maxWidth = width;
-            maxHeight = height;
-        } else if (width == maxWidth) {
-            // More than one resolution with max width exists, find the max height for this width
-            if (height > maxHeight) {
-                maxHeight = height;
-            }
-        }
-    }
-
-    GA_LOGINFO("%s: Result: %dx%d", __FUNCTION__, maxWidth, maxHeight);
-
-    GA_LOGTRACE("EXIT %s", __FUNCTION__);
-
-    if (maxWidth < 0 || maxHeight < 0) {
-        return VCD_ERR_GENERAL;
-    }
-
-    *p_maxWidth = maxWidth;
-    *p_maxHeight = maxHeight;
-
-    return VCD_NO_ERROR;
+    return get_min_or_max_resolution(handle, p_maxWidth, p_maxHeight, TRUE);
 }
 
 

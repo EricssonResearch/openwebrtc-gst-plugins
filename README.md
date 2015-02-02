@@ -7,6 +7,7 @@ Plugins in this repository:
 * *androidvideo* - Android video camera source
 * *erdtls* - DTLS-SRTP
 * *videorepair* - Packet loss detector (technical - handles gap and force key unit events when decoders don't)
+* *sctp* - Stream Control Transmission Protocol (SCTP) network transport
 
 Plugins now moved to GStreamer:
 

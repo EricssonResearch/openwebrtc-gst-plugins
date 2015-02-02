@@ -68,6 +68,17 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([ ], [ ])], [
   AC_MSG_RESULT([no])
 ])
 
+AC_CHECK_HEADERS([usrsctp.h],
+  [AC_CHECK_LIB([usrsctp], [usrsctp_init],
+    [with_sctp="yes"; USRSCTP_LIBS="-lusrsctp"],
+    [with_sctp="no"]
+  )],[with_sctp="no"]
+)
+AC_SUBST(USRSCTP_LIBS)
+if test "x$with_sctp" != "xyes"; then
+  AC_MSG_ERROR([You need libusrsctp for the build])
+fi
+
 AC_CHECK_HEADERS([openssl/ssl.h],
   [AC_CHECK_LIB([ssl], [SSL_library_init],
     [with_openssl="yes"; OPENSSL_LIBS="-lssl"],
@@ -230,5 +241,8 @@ dnl set proper LDFLAGS for plugins
 GST_PLUGIN_LDFLAGS='-module -avoid-version -export-symbols-regex [_]*\(gst_\|Gst\|GST_\).*'
 AC_SUBST(GST_PLUGIN_LDFLAGS)
 
-AC_CONFIG_FILES([Makefile ext/Makefile ext/erdtls/Makefile gst/Makefile sys/Makefile gst/videorepair/Makefile])
+AC_CONFIG_FILES([Makefile gst-libs/Makefile gst-libs/gst/Makefile
+                 gst-libs/gst/sctp/Makefile ext/Makefile ext/erdtls/Makefile
+                 ext/sctp/Makefile gst/Makefile sys/Makefile
+                 gst/videorepair/Makefile gstreamer-sctp-1.0.pc])
 AC_OUTPUT

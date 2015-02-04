@@ -244,6 +244,11 @@ void er_dtls_connection_start(ErDtlsConnection *self, gboolean is_client)
     g_mutex_lock(&priv->mutex);
     LOG_TRACE(self, "locked @ start");
 
+    priv->is_alive = TRUE;
+    priv->timeout_set = FALSE;
+    priv->bio_buffer = NULL;
+    priv->bio_buffer_len = 0;
+    priv->bio_buffer_offset = 0;
     priv->keys_exported = FALSE;
 
     priv->is_client = is_client;

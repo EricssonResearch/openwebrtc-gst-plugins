@@ -68,9 +68,47 @@ static void er_dtls_agent_finalize(GObject *gobject);
 static void er_dtls_agent_set_property(GObject *, guint prop_id, const GValue *, GParamSpec *);
 const gchar *er_dtls_agent_peek_id(ErDtlsAgent *);
 
+static GRWLock *ssl_locks;
+
+static void ssl_locking_function(gint mode, gint lock_num, const gchar *file, gint line)
+{
+    gboolean locking;
+    gboolean reading;
+    GRWLock *lock;
+
+    locking = mode & CRYPTO_LOCK;
+    reading = mode & CRYPTO_READ;
+    lock = &ssl_locks[lock_num];
+
+    LOG_LOG(NULL, "%s SSL lock for %s, thread=%p location=%s:%d",
+        locking ? "locking" : "unlocking", reading ? "reading" : "writing",
+        g_thread_self(), file, line);
+
+    if (locking) {
+        if (reading) {
+            g_rw_lock_reader_lock(lock);
+        } else {
+            g_rw_lock_writer_lock(lock);
+        }
+    } else {
+        if (reading) {
+            g_rw_lock_reader_unlock(lock);
+        } else {
+            g_rw_lock_writer_unlock(lock);
+        }
+    }
+}
+
+static gulong ssl_thread_id_function(void)
+{
+    return (gulong) g_thread_self();
+}
+
 void _er_dtls_init_openssl()
 {
     static gsize is_init = 0;
+    gint i;
+    gint num_locks;
 
     if (g_once_init_enter(&is_init)) {
         if (OPENSSL_VERSION_NUMBER < 0x1000100fL) {
@@ -82,6 +120,14 @@ void _er_dtls_init_openssl()
         SSL_library_init();
         SSL_load_error_strings();
         ERR_load_BIO_strings();
+
+        num_locks = CRYPTO_num_locks();
+        ssl_locks = g_new(GRWLock, num_locks);
+        for (i = 0; i < num_locks; ++i) {
+            g_rw_lock_init(&ssl_locks[i]);
+        }
+        CRYPTO_set_locking_callback(ssl_locking_function);
+        CRYPTO_set_id_callback(ssl_thread_id_function);
 
         g_once_init_leave(&is_init, 1);
     }

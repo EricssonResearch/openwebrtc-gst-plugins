@@ -360,8 +360,10 @@ static gboolean src_activate_mode(GstPad *pad, GstObject *parent, GstPadMode mod
     } else {
         GST_DEBUG_OBJECT(self, "deactivating src pad");
 
+        g_mutex_lock(&self->queue_lock);
+        GST_PAD_MODE(pad) = GST_PAD_MODE_NONE;
         g_cond_signal(&self->queue_cond_add);
-
+        g_mutex_unlock(&self->queue_lock);
         success = gst_pad_stop_task(pad);
         if (!success) {
             GST_WARNING_OBJECT(self, "failed to deactivate pad task");
@@ -378,14 +380,16 @@ static void src_task_loop(GstPad *pad)
     GstPad *peer;
     gboolean peer_is_active;
 
-    if (!gst_pad_is_active(pad)) {
-        GST_LOG_OBJECT(self, "src task loop entered on inactive pad");
-        return;
-    }
-
     GST_TRACE_OBJECT(self, "src loop: acquiring lock");
     g_mutex_lock(&self->queue_lock);
     GST_TRACE_OBJECT(self, "src loop: acquired lock");
+
+    if (!gst_pad_is_active(pad)) {
+        GST_LOG_OBJECT(self, "src task loop entered on inactive pad");
+        GST_TRACE_OBJECT(self, "src loop: releasing lock");
+        g_mutex_unlock(&self->queue_lock);
+        return;
+    }
 
     while (!self->queue->len) {
         GST_TRACE_OBJECT(self, "src loop: queue empty, waiting for add");

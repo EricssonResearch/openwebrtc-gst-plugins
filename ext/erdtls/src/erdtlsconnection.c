@@ -372,11 +372,12 @@ gint er_dtls_connection_process(ErDtlsConnection *self, gpointer data, gint len)
 
     g_return_val_if_fail(self->priv->ssl, 0);
     g_return_val_if_fail(self->priv->bio, 0);
-    g_return_val_if_fail(!priv->bio_buffer, 0);
 
     LOG_TRACE(self, "locking @ process");
     g_mutex_lock(&priv->mutex);
     LOG_TRACE(self, "locked @ process");
+
+    g_warn_if_fail(!priv->bio_buffer);
 
     priv->bio_buffer = data;
     priv->bio_buffer_len = len;

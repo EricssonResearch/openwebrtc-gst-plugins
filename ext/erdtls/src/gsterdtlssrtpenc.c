@@ -67,6 +67,13 @@ G_DEFINE_TYPE_WITH_CODE(GstErDtlsSrtpEnc, gst_er_dtls_srtp_enc, GST_TYPE_ER_DTLS
     GST_DEBUG_CATEGORY_INIT(er_dtls_srtp_enc_debug, "erdtlssrtpenc", 0, "Ericsson DTLS Decoder"));
 
 enum {
+    SIGNAL_ON_KEY_SET,
+    NUM_SIGNALS
+};
+
+static guint signals[NUM_SIGNALS];
+
+enum {
     PROP_0,
     PROP_IS_CLIENT,
     NUM_PROPERTIES
@@ -105,6 +112,11 @@ static void gst_er_dtls_srtp_enc_class_init(GstErDtlsSrtpEncClass *klass)
     element_class->request_new_pad = GST_DEBUG_FUNCPTR(gst_er_dtls_srtp_enc_request_new_pad);
 
     dtls_srtp_bin_class->remove_dtls_element = GST_DEBUG_FUNCPTR(gst_er_dtls_srtp_enc_remove_dtls_element);
+
+    signals[SIGNAL_ON_KEY_SET] =
+        g_signal_new("on-key-set", G_TYPE_FROM_CLASS(klass),
+            G_SIGNAL_RUN_LAST, 0, NULL, NULL,
+            g_cclosure_marshal_generic, G_TYPE_NONE, 0);
 
     properties[PROP_IS_CLIENT] =
         g_param_spec_boolean("is-client",
@@ -359,6 +371,8 @@ static void on_key_received(GObject *encoder, GstErDtlsSrtpEnc *self)
             "key", buffer,
             "random-key", FALSE,
             NULL);
+
+        g_signal_emit(self, signals[SIGNAL_ON_KEY_SET], 0);
     } else {
         GST_DEBUG_OBJECT(self, "ignoring keys received from DTLS handshake, key struct is set");
     }

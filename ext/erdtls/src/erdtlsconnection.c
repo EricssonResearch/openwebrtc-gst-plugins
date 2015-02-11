@@ -790,6 +790,7 @@ static long bio_method_ctrl(BIO *bio, int cmd, long arg1, void *arg2)
     ErDtlsConnectionPrivate *priv = self->priv;
 
     switch (cmd) {
+    case BIO_CTRL_DGRAM_SET_NEXT_TIMEOUT:
     case BIO_CTRL_DGRAM_SET_RECV_TIMEOUT:
         LOG_LOG(self, "BIO: Timeout set");
         priv->timeout_set = TRUE;

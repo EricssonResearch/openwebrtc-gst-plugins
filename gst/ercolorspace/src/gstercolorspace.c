@@ -71,25 +71,138 @@ static gboolean gst_ercolorspace_set_info (GstVideoFilter *filter,
 static GstFlowReturn gst_ercolorspace_transform_frame (GstVideoFilter * filter, GstVideoFrame *in_frame, GstVideoFrame *out_frame);
 
 static GstCaps *
+transform_structure_for_format (const GstStructure * str, GstPadDirection direction, const gchar * format)
+{
+    /* We can transform:
+     *
+     * I420 -> BGRA/RGBA/I420
+     * NV21 -> I420/BGRA/RGBA/NV21
+     * NV12 -> I420/BGRA/RGBA/NV12
+     *
+     * The passthrough cases are handled elsewhere
+     */
+    if (direction == GST_PAD_SINK) {
+        if (strcmp (format, "I420") == 0) {
+            GstStructure *s;
+            GValue vl = G_VALUE_INIT;
+            GValue v = G_VALUE_INIT;
+
+            g_value_init (&vl, GST_TYPE_LIST);
+            g_value_init (&v, G_TYPE_STRING);
+            s = gst_structure_copy (str);
+            gst_structure_remove_fields (s, "chroma-site", "colorimetry", NULL);
+            g_value_set_string (&v, "BGRA");
+            gst_value_list_append_value (&vl, &v);
+            g_value_set_string (&v, "RGBA");
+            gst_value_list_append_value (&vl, &v);
+            gst_structure_set_value (s, "format", &vl);
+            g_value_unset (&v);
+            g_value_unset (&vl);
+
+            return gst_caps_new_full (s, NULL);
+        } else if (strcmp (format, "NV21") == 0 || strcmp (format, "NV12") == 0) {
+            GstStructure *s1, *s2;
+            GValue vl = G_VALUE_INIT;
+            GValue v = G_VALUE_INIT;
+
+            s1 = gst_structure_copy (str);
+            gst_structure_set (s1, "format", G_TYPE_STRING, "I420", NULL);
+
+            g_value_init (&vl, GST_TYPE_LIST);
+            g_value_init (&v, G_TYPE_STRING);
+            s2 = gst_structure_copy (str);
+            gst_structure_remove_fields (s2, "chroma-site", "colorimetry", NULL);
+            g_value_set_string (&v, "BGRA");
+            gst_value_list_append_value (&vl, &v);
+            g_value_set_string (&v, "RGBA");
+            gst_value_list_append_value (&vl, &v);
+            gst_structure_set_value (s2, "format", &vl);
+            g_value_unset (&v);
+            g_value_unset (&vl);
+
+            return gst_caps_new_full (s1, s2, NULL);
+        } else {
+            /* Only passthrough */
+            return gst_caps_new_empty ();
+        }
+    } else {
+        if (strcmp (format, "I420") == 0) {
+            GstStructure *s;
+            GValue vl = G_VALUE_INIT;
+            GValue v = G_VALUE_INIT;
+
+            g_value_init (&vl, GST_TYPE_LIST);
+            g_value_init (&v, G_TYPE_STRING);
+            s = gst_structure_copy (str);
+            g_value_set_string (&v, "NV12");
+            gst_value_list_append_value (&vl, &v);
+            g_value_set_string (&v, "NV21");
+            gst_value_list_append_value (&vl, &v);
+            gst_structure_set_value (s, "format", &vl);
+            g_value_unset (&v);
+            g_value_unset (&vl);
+
+            return gst_caps_new_full (s, NULL);
+        } else if (strcmp (format, "RGBA") == 0 || strcmp (format, "BGRA") == 0) {
+            GstStructure *s;
+            GValue vl = G_VALUE_INIT;
+            GValue v = G_VALUE_INIT;
+
+            g_value_init (&vl, GST_TYPE_LIST);
+            g_value_init (&v, G_TYPE_STRING);
+            s = gst_structure_copy (str);
+            gst_structure_remove_fields (s, "colorimetry", NULL);
+            g_value_set_string (&v, "I420");
+            gst_value_list_append_value (&vl, &v);
+            g_value_set_string (&v, "NV12");
+            gst_value_list_append_value (&vl, &v);
+            g_value_set_string (&v, "NV21");
+            gst_value_list_append_value (&vl, &v);
+            gst_structure_set_value (s, "format", &vl);
+            g_value_unset (&v);
+            g_value_unset (&vl);
+
+            return gst_caps_new_full (s, NULL);
+        } else {
+            /* Only passthrough */
+            return gst_caps_new_empty ();
+        }
+    }
+}
+
+static GstCaps *
 gst_ercolorspace_transform_caps (GstBaseTransform * trans, GstPadDirection direction, GstCaps * query_caps, GstCaps * filter_caps)
 {
     GstCaps *result_caps;
     int caps_size, i;
-    GstCaps *copy_caps;
+    GstCaps *to_caps;
 
-    copy_caps = gst_caps_copy (query_caps);
-    caps_size = gst_caps_get_size(copy_caps);
+    caps_size = gst_caps_get_size(query_caps);
 
+    to_caps = gst_caps_new_empty ();
     for (i = 0; i < caps_size; ++i) {
-        GstStructure *str = gst_caps_get_structure(copy_caps, i);
-        /* FIXME: Probably want to remove the colorimetry, chroma-siting
-         * and other fields too, which are not relevant for RGB and can
-         * cause negotiation errors */
-        gst_structure_remove_field(str, "format");
+        GstStructure *str = gst_caps_get_structure(query_caps, i);
+        const GValue *format = gst_structure_get_value (str, "format");
+
+        if (GST_VALUE_HOLDS_LIST (format)) {
+            gint j, len;
+
+            len = gst_value_list_get_size (format);
+            for (j = 0; j < len; j++) {
+                const GValue *v = gst_value_list_get_value (format, j);
+                if (G_VALUE_HOLDS_STRING (v)) {
+                    GstCaps *tmp = transform_structure_for_format (str, direction, g_value_get_string (v));
+                    gst_caps_append (to_caps, tmp);
+                }
+            }
+        } else if (G_VALUE_HOLDS_STRING (format)) {
+            GstCaps *tmp = transform_structure_for_format (str, direction, g_value_get_string (format));
+            gst_caps_append (to_caps, tmp);
+        }
     }
 
     /* Prefer passthrough */
-    result_caps = gst_caps_merge (gst_caps_ref (query_caps), copy_caps);
+    result_caps = gst_caps_merge (gst_caps_ref (query_caps), to_caps);
 
     /* basetransform will filter against our template caps */
 

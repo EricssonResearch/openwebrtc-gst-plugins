@@ -418,6 +418,36 @@ static GstPadProbeReturn remove_dtls_decoder_probe_callback(GstPad *pad,
 
 static GstPadProbeReturn drop_funnel_rtcp_caps(GstPad *pad, GstPadProbeInfo *info, gpointer data)
 {
-    return (GST_EVENT_TYPE(gst_pad_probe_info_get_event(info)) == GST_EVENT_CAPS)
-        ? GST_PAD_PROBE_DROP : GST_PAD_PROBE_OK;
+    /* FIXME: This is needed for setting the proper caps until
+     * GStreamer supports MIXED caps or another mechanism to
+     * prevent renegotiation all the time when two different caps
+     * are going over the same pad
+     */
+    if (GST_EVENT_TYPE (info->data) == GST_EVENT_CAPS) {
+      GstCaps *caps, *peercaps;
+      GstStructure *s;
+
+      gst_event_parse_caps (GST_EVENT (info->data), &caps);
+      s = gst_caps_get_structure (caps, 0);
+      if (gst_structure_has_name (s, "application/x-rtcp")) {
+        peercaps = gst_pad_query_caps (pad, NULL);
+
+        /* If the peer does not accept RTCP, we are linked to
+         * the RTP sinkpad of rtpbin. In that case we have to
+         * drop the RTCP caps and assume that we sent RTP caps
+         * before here, which is very likely but not guaranteed
+         * if for some reason we receive RTCP before any RTP.
+         * In that unlikely case we will get event misordering
+         * warnings later, instead of getting them always as
+         * happens now.
+         */
+        if (peercaps && !gst_caps_is_subset (caps, peercaps)) {
+          gst_caps_unref (peercaps);
+          return GST_PAD_PROBE_DROP;
+        }
+        gst_caps_replace (&peercaps, NULL);
+      }
+    }
+
+    return GST_PAD_PROBE_OK;
 }

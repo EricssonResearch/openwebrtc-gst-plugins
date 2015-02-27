@@ -448,30 +448,28 @@ static GstPad *get_pad_for_stream_id(GstSctpDec *self, guint16 stream_id)
 
     pad_name = g_strdup_printf("src_%hu", stream_id);
     new_pad = gst_element_get_static_pad(GST_ELEMENT(self), pad_name);
-    if (new_pad) {
-        g_free(pad_name);
-        return new_pad;
-    }
+    if (new_pad)
+        goto out;
 
     g_object_get(self->sctp_association, "state", &state, NULL);
 
     if (state != GST_SCTP_ASSOCIATION_STATE_CONNECTED) {
         GST_WARNING_OBJECT(self, "The SCTP association must be established before a new stream can be created");
-        return NULL;
+        goto out;
     }
 
     if (stream_id > MAX_STREAM_ID)
-        return NULL;
+        goto out;
 
     template = gst_static_pad_template_get(&src_template);
     new_pad = g_object_new(GST_TYPE_SCTP_DEC_PAD, "name", pad_name,
         "direction", template->direction, "template", template, NULL);
-    g_free(pad_name);
+    gst_object_unref(template);
 
     gst_pad_set_event_function(new_pad, GST_DEBUG_FUNCPTR((GstPadEventFunction) gst_sctp_dec_src_event));
 
     if (!gst_pad_set_active(new_pad, TRUE))
-        goto error_cleanup;
+        goto error_cleanup_pad;
 
     pad_stream_id = gst_pad_create_stream_id_printf (new_pad, GST_ELEMENT(self), "%hu", stream_id);
     gst_pad_push_event(new_pad, gst_event_new_stream_start(pad_stream_id));
@@ -479,17 +477,20 @@ static GstPad *get_pad_for_stream_id(GstSctpDec *self, guint16 stream_id)
     gst_pad_sticky_events_foreach(self->sink_pad, copy_sticky_events, new_pad);
 
     if (!gst_element_add_pad(GST_ELEMENT(self), new_pad))
-        goto error_cleanup;
+        goto error_cleanup_pad;
 
     gst_pad_start_task(new_pad, (GstTaskFunction)gst_sctp_data_srcpad_loop, new_pad, NULL);
 
     gst_object_ref(new_pad);
 
-    return new_pad;
+    goto out;
 
-error_cleanup:
+error_cleanup_pad:
     gst_object_unref(new_pad);
-    return NULL;
+    new_pad = NULL;
+out:
+    g_free(pad_name);
+    return new_pad;
 }
 
 static void remove_pad(GstElement *element, GstPad *pad)

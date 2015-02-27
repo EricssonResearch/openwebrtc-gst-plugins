@@ -387,7 +387,7 @@ static gboolean configure_association(GstSctpDec *self)
             "Could not configure SCTP association. Association already in use!");
         g_object_unref(self->sctp_association);
         self->sctp_association = NULL;
-        goto error;
+        return FALSE;
     }
 
     self->signal_handler_stream_reset = g_signal_connect_object(self->sctp_association,
@@ -399,8 +399,6 @@ static gboolean configure_association(GstSctpDec *self)
     gst_sctp_association_set_on_packet_received(self->sctp_association, on_receive, self);
 
     return TRUE;
-error:
-    return FALSE;
 }
 
 static gboolean gst_sctp_dec_src_event(GstPad *pad, GstSctpDec *self, GstEvent *event)

@@ -683,7 +683,7 @@ static gboolean configure_association(GstSctpEnc *self)
         GST_WARNING_OBJECT(self, "Could not configure SCTP association. Association already in use!");
         g_object_unref(self->sctp_association);
         self->sctp_association = NULL;
-        goto error;
+        return FALSE;
     }
 
     self->signal_handler_state_changed = g_signal_connect_object(self->sctp_association,
@@ -698,8 +698,6 @@ static gboolean configure_association(GstSctpEnc *self)
     gst_sctp_association_set_on_packet_out(self->sctp_association, on_sctp_packet_out, self);
 
     return TRUE;
-error:
-    return FALSE;
 }
 
 static void on_sctp_association_state_changed(GstSctpAssociation *sctp_association, GParamSpec *pspec,

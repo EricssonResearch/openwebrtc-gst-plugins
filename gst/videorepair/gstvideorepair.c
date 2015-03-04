@@ -277,4 +277,4 @@ GST_PLUGIN_DEFINE(
     "0.0.1",
     "BSD",
     "OpenWebRTC GStreamer plugins",
-    "http://www.ericsson.com")
+    "http://www.openwebrtc.io/")

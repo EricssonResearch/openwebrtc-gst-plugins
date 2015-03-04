@@ -38,11 +38,6 @@ static gboolean plugin_init(GstPlugin *plugin)
         && gst_element_register(plugin, "sctpdec", GST_RANK_NONE, GST_TYPE_SCTP_DEC);
 }
 
-
-#ifndef PACKAGE
-#define PACKAGE "sctp"
-#endif
-
 GST_PLUGIN_DEFINE(
     GST_VERSION_MAJOR,
     GST_VERSION_MINOR,
@@ -52,4 +47,4 @@ GST_PLUGIN_DEFINE(
     PACKAGE_VERSION,
     "BSD",
     "OpenWebRTC GStreamer plugins",
-    "")
+    "http://www.ericsson.com/")

@@ -176,7 +176,9 @@ static void er_dtls_agent_init(ErDtlsAgent *self)
     SSL_CTX_set_tlsext_use_srtp(priv->ssl_context, "SRTP_AES128_CM_SHA1_80");
     SSL_CTX_set_cipher_list(priv->ssl_context, "ALL:!ADH:!LOW:!EXP:!MD5:@STRENGTH");
     SSL_CTX_set_read_ahead(priv->ssl_context, 1);
+#if OPENSSL_VERSION_NUMBER >= 0x1000200fL
     SSL_CTX_set_ecdh_auto(priv->ssl_context, 1);
+#endif
 }
 
 static void er_dtls_agent_finalize(GObject *gobject)

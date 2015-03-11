@@ -25,6 +25,6 @@ classes_dex.jar: src/com/ericsson/gstreamer/VideoCaptureDevicePreviewCallbackHan
 
 %.class: %.java
 	test -d src || mkdir src
-	$(JAVAC) -classpath $(ANDROID_CLASSPATH) -d src $<
+	$(JAVAC) -source 1.7 -target 1.7 -classpath $(ANDROID_CLASSPATH) -d src $<
 
 -include $(top_srcdir)/git.mk

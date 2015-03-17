@@ -42,11 +42,8 @@
 #if ER_DTLS_USE_GST_LOG
     GST_DEBUG_CATEGORY_STATIC(er_dtls_agent_debug);
 #   define GST_CAT_DEFAULT er_dtls_agent_debug
-    G_DEFINE_TYPE_WITH_CODE(ErDtlsAgent, er_dtls_agent, G_TYPE_OBJECT,
-        GST_DEBUG_CATEGORY_INIT(er_dtls_agent_debug, "erdtlsagent", 0, "Ericsson DTLS Agent"));
-#else
-    G_DEFINE_TYPE(ErDtlsAgent, er_dtls_agent, G_TYPE_OBJECT);
 #endif
+G_DEFINE_TYPE(ErDtlsAgent, er_dtls_agent, G_TYPE_OBJECT);
 
 #define ER_DTLS_AGENT_GET_PRIVATE(obj) (G_TYPE_INSTANCE_GET_PRIVATE((obj), ER_TYPE_DTLS_AGENT, ErDtlsAgentPrivate))
 
@@ -111,6 +108,9 @@ void _er_dtls_init_openssl()
     gint num_locks;
 
     if (g_once_init_enter(&is_init)) {
+#if ER_DTLS_USE_GST_LOG
+        GST_DEBUG_CATEGORY_INIT(er_dtls_agent_debug, "erdtlsagent", 0, "Ericsson DTLS Agent");
+#endif
         if (OPENSSL_VERSION_NUMBER < 0x1000100fL) {
             LOG_WARNING(NULL, "Incorrect OpenSSL version, should be >= 1.0.1, is %s", OPENSSL_VERSION_TEXT);
             g_assert_not_reached();

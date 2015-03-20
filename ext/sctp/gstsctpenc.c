@@ -818,6 +818,9 @@ static void get_config_from_caps(const GstCaps *caps, gboolean *ordered,
     *reliability_param = 0;
     *ppid_available = FALSE;
 
+    if (!caps)
+      return;
+
     n = gst_caps_get_size(caps);
     for (i = 0; i < n; i++) {
         s = gst_caps_get_structure(caps, i);

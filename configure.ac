@@ -137,11 +137,21 @@ if test "x$enable_android_plugins" = xyes; then
   if test -z "$XXD"; then
     AC_MSG_ERROR([You need 'xxd' to build the Android plugins])
   fi
+
+  api_found=0
   dx_path=`AS_DIRNAME(["$DX"])`
-  ANDROID_CLASSPATH="$dx_path/../../platforms/android-19/android.jar"
-  if ! test -f "$ANDROID_CLASSPATH"; then
-    AC_MSG_ERROR([Android API level 19 not found in the SDK])
+  AC_MSG_CHECKING([which Android API Level to use])
+  for api_level in $(seq 9 22); do
+    ANDROID_CLASSPATH="$dx_path/../../platforms/android-$api_level/android.jar"
+    if test -f "$ANDROID_CLASSPATH"; then
+      api_found=$api_level
+      break
+    fi
+  done
+  if test "$api_found" = 0; then
+    AC_MSG_ERROR([No usable Android API levels not found in the SDK])
   fi
+  AC_MSG_RESULT([$api_found])
   AC_SUBST(ANDROID_CLASSPATH)
 fi
 AM_CONDITIONAL(BUILD_ANDROID_PLUGINS, test "x$enable_android_plugins" = "xyes")

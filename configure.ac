@@ -79,17 +79,22 @@ if test "x$with_sctp" != "xyes"; then
   AC_MSG_ERROR([You need libusrsctp for the build])
 fi
 
-AC_CHECK_HEADERS([openssl/ssl.h],
-  [AC_CHECK_LIB([ssl], [SSL_library_init],
-    [with_openssl="yes"; OPENSSL_LIBS="-lssl"],
-    [with_openssl="no"]
-  )],[with_openssl="no"]
-)
-AC_SUBST(OPENSSL_LIBS)
-
-if test "x$with_openssl" != "xyes"; then
-  AC_MSG_ERROR([You need OpenSSL for the build])
+dnl check for openssl
+AC_MSG_CHECKING([whether to build erdtls])
+AC_ARG_ENABLE(
+  erdtls,
+  AC_HELP_STRING(
+    [--enable-erdtls],
+    [build erdtls plugin @<:@default=no@:>@]),
+  [AS_CASE(
+    [$enableval], [no], [], [yes], [],
+    [AC_MSG_ERROR([bad value "$enableval" for --enable-erdtls])])],
+  [enable_erdtls=no])
+AC_MSG_RESULT([$enable_erdtls])
+if test "x$enable_erdtls" = xyes; then
+  PKG_CHECK_MODULES(OPENSSL, [openssl])
 fi
+AM_CONDITIONAL(ERDTLS, test x$enable_erdtls = xyes)
 
 dnl build static plugins or not
 AC_MSG_CHECKING([whether to build static plugins or not])

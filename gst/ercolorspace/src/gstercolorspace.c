@@ -31,9 +31,9 @@
 
 #include "gstercolorspace.h"
 
-#if defined(__arm__) && !defined(__arm64__)
+#if defined(__arm__) || defined(__arm64__)
 
-#include "gstercolorspace_neon.h"
+#include <arm_neon.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -69,6 +69,588 @@ static gboolean gst_ercolorspace_set_info (GstVideoFilter *filter,
                            GstCaps *incaps, GstVideoInfo *in_info,
                            GstCaps *outcaps, GstVideoInfo *out_info);
 static GstFlowReturn gst_ercolorspace_transform_frame (GstVideoFilter * filter, GstVideoFrame *in_frame, GstVideoFrame *out_frame);
+
+
+static void gst_ercolorspace_transform_nv12_to_bgra_neon (guint8 * Y, guint8 * UV, guint8 * RGB, const guint width)
+{
+    guint x;
+    uint8x8_t srcY_d8, srcUV_d8, srcU_d8, srcV_d8, srcUtmp_d8, srcVtmp_d8;
+    int16x8_t const16_q16, const128_q16;
+    int16x4_t const298_d16, const409_d16, const208_d16, const100_d16, const516_d16;
+    int16x8_t srcY_q16, srcU_q16, srcV_q16;
+    int16x8_t tmp1_q16;
+    int32x4_t tmp1_q32, tmp2_q32, tmp3_q32, tmp4_q32, tmp5_q32, tmp6_q32;
+    uint16x4_t tmp1_d16, tmp2_d16;
+    uint8x8x4_t BGRA_d8x4;
+
+    BGRA_d8x4.val[3] = vdup_n_u8(255);
+
+    const16_q16  = vdupq_n_s16(16);
+    const128_q16 = vdupq_n_s16(128);
+    const298_d16 = vdup_n_s16(298);
+    const409_d16 = vdup_n_s16(409);
+    const100_d16 = vdup_n_s16(100);
+    const208_d16 = vdup_n_s16(208);
+    const516_d16 = vdup_n_s16(516);
+
+    for (x = 0; x < width; x+=8)
+    {
+        /* Set up input*/
+        srcY_d8  = vld1_u8(Y + x);
+        srcUV_d8 = vld1_u8(UV + x);              /*load src data UV, [v1 u1 v2 u2 v3 u3 v4 u4] */
+
+        srcV_d8 = vreinterpret_u8_u16( vshr_n_u16( vreinterpret_u16_u8(srcUV_d8), 8) );          /*shift down V, [0 v1 0 v2 0 v3 0 v4]*/
+        srcU_d8 = vreinterpret_u8_u16( vshl_n_u16( vreinterpret_u16_u8(srcUV_d8), 8) );          /*shift up   U, [u1 0 u2 0 u3 0 u4 0]*/
+
+        srcVtmp_d8 = vreinterpret_u8_u16( vshl_n_u16( vreinterpret_u16_u8(srcV_d8), 8) );        /*shift up   V, [v1 0 v2 0 v3 0 v4 0]*/
+        srcUtmp_d8 = vreinterpret_u8_u16( vshr_n_u16( vreinterpret_u16_u8(srcU_d8), 8) );        /*shift down U, [0 u1 0 u2 0 u3 0 u4]*/
+
+        srcV_q16 = vreinterpretq_s16_u16( vaddl_u8(srcV_d8, srcVtmp_d8) );     /*add V, [v1 v1 v2 v2 v3 v3 v4 v4]*/
+        srcU_q16 = vreinterpretq_s16_u16( vaddl_u8(srcU_d8, srcUtmp_d8) );     /*add U, [u1 u1 u2 u2 u3 u3 u4 u4]*/
+
+        srcY_q16 = vreinterpretq_s16_u16( vmovl_u8(srcY_d8) );
+
+        /* R channel*/
+        tmp1_q16 = vsubq_s16(srcY_q16, const16_q16);                  /* C = yarr[] - 16*/
+        tmp1_q32 = vmull_s16(vget_low_s16(tmp1_q16), const298_d16);   /* 298 * C*/
+        tmp2_q32 = vmull_s16(vget_high_s16(tmp1_q16), const298_d16);
+
+        tmp1_q16 = vsubq_s16(srcV_q16, const128_q16);                 /* E = uvarr[v] - 128*/
+        tmp3_q32 = vmull_s16(vget_low_s16(tmp1_q16), const409_d16);   /* 409 * E*/
+        tmp4_q32 = vmull_s16(vget_high_s16(tmp1_q16), const409_d16);
+
+        tmp3_q32 = vaddq_s32(tmp1_q32, tmp3_q32);                      /* 298 * C           + 409 * E*/
+        tmp4_q32 = vaddq_s32(tmp2_q32, tmp4_q32);
+
+        tmp1_d16 = vqrshrun_n_s32(tmp3_q32, 8);                       /* clip(( 298 * C           + 409 * E + 128) >> 8)*/
+        tmp2_d16 = vqrshrun_n_s32(tmp4_q32, 8);
+
+        BGRA_d8x4.val[2] = vqmovn_u16(vcombine_u16(tmp1_d16, tmp2_d16));          /* 16bit to 8bit, R channel done!*/
+
+        /* G channel*/
+        tmp3_q32 = vmull_s16(vget_low_s16(tmp1_q16), const208_d16);   /* 208 * E*/
+        tmp4_q32 = vmull_s16(vget_high_s16(tmp1_q16), const208_d16);
+
+        tmp3_q32 = vsubq_s32(tmp1_q32, tmp3_q32);                      /* 298 * C           - 208 * E*/
+        tmp4_q32 = vsubq_s32(tmp2_q32, tmp4_q32);
+
+        tmp1_q16 = vsubq_s16(srcU_q16, const128_q16);                 /* D = uvarr[u] - 128*/
+        tmp5_q32 = vmull_s16(vget_low_s16(tmp1_q16), const100_d16);   /* 100 * D*/
+        tmp6_q32 = vmull_s16(vget_high_s16(tmp1_q16), const100_d16);
+
+        tmp3_q32 = vsubq_s32(tmp3_q32, tmp5_q32);                      /* 298 * C - 100 * D - 208 * E*/
+        tmp4_q32 = vsubq_s32(tmp4_q32, tmp6_q32);
+
+        tmp1_d16 = vqrshrun_n_s32(tmp3_q32, 8);                       /* clip(( 298 * C - 100 * D - 208 * E + 128) >> 8)*/
+        tmp2_d16 = vqrshrun_n_s32(tmp4_q32, 8);
+
+        BGRA_d8x4.val[1] = vqmovn_u16(vcombine_u16(tmp1_d16, tmp2_d16));          /* 16bit to 8bit, G channel done!*/
+
+        /* B channel*/
+        tmp5_q32 = vmull_s16(vget_low_s16(tmp1_q16), const516_d16);   /* 516 * D*/
+        tmp6_q32 = vmull_s16(vget_high_s16(tmp1_q16), const516_d16);
+
+        tmp3_q32 = vaddq_s32(tmp1_q32, tmp5_q32);                      /* 298 * C + 516 * D*/
+        tmp4_q32 = vaddq_s32(tmp2_q32, tmp6_q32);
+
+        tmp1_d16 = vqrshrun_n_s32(tmp3_q32, 8);                       /* clip(( 298 * C + 516 * D           + 128) >> 8)*/
+        tmp2_d16 = vqrshrun_n_s32(tmp4_q32, 8);
+
+        BGRA_d8x4.val[0] = vqmovn_u16(vcombine_u16(tmp1_d16, tmp2_d16));          /* 16bit to 8bit, B channel done!*/
+
+        /* store results*/
+        vst4_u8(RGB + x*4, BGRA_d8x4);
+    }
+}
+
+static void gst_ercolorspace_transform_nv21_to_bgra_neon (guint8 * Y, guint8 * UV, guint8 * RGB, const guint width)
+{
+    guint x;
+    uint8x8_t srcY_d8, srcUV_d8, srcU_d8, srcV_d8, srcUtmp_d8, srcVtmp_d8;
+    int16x8_t const16_q16, const128_q16;
+    int16x4_t const298_d16, const409_d16, const208_d16, const100_d16, const516_d16;
+    int16x8_t srcY_q16, srcU_q16, srcV_q16;
+    int16x8_t tmp1_q16;
+    int32x4_t tmp1_q32, tmp2_q32, tmp3_q32, tmp4_q32, tmp5_q32, tmp6_q32;
+    uint16x4_t tmp1_d16, tmp2_d16;
+    uint8x8x4_t BGRA_d8x4;
+
+    BGRA_d8x4.val[3] = vdup_n_u8(255);
+
+    const16_q16  = vdupq_n_s16(16);
+    const128_q16 = vdupq_n_s16(128);
+    const298_d16 = vdup_n_s16(298);
+    const409_d16 = vdup_n_s16(409);
+    const100_d16 = vdup_n_s16(100);
+    const208_d16 = vdup_n_s16(208);
+    const516_d16 = vdup_n_s16(516);
+
+    for (x = 0; x < width; x+=8)
+    {
+        // Set up input
+        srcY_d8  = vld1_u8(Y + x);
+        srcUV_d8 = vld1_u8(UV + x);              /*load src data UV, [u1 v1 u2 v2 u3 v3 u4 v4] */
+
+        srcU_d8 = vreinterpret_u8_u16( vshr_n_u16( vreinterpret_u16_u8(srcUV_d8), 8) );          /*shift down U, [0 u1 0 u2 0 u3 0 u4]*/
+        srcV_d8 = vreinterpret_u8_u16( vshl_n_u16( vreinterpret_u16_u8(srcUV_d8), 8) );          /*shift up V,   [v1 0 v2 0 v3 0 v4 0]*/
+
+        srcUtmp_d8 = vreinterpret_u8_u16( vshl_n_u16( vreinterpret_u16_u8(srcU_d8), 8) );        /*shift up   U, [u1 0 u2 0 u3 0 u4 0]*/
+        srcVtmp_d8 = vreinterpret_u8_u16( vshr_n_u16( vreinterpret_u16_u8(srcV_d8), 8) );        /*shift down V, [0 v1 0 v2 0 v3 0 v4]*/
+
+        srcV_q16 = vreinterpretq_s16_u16( vaddl_u8(srcV_d8, srcVtmp_d8) );     /*add V, [v1 v1 v2 v2 v3 v3 v4 v4]*/
+        srcU_q16 = vreinterpretq_s16_u16( vaddl_u8(srcU_d8, srcUtmp_d8) );     /*add U, [u1 u1 u2 u2 u3 u3 u4 u4]*/
+
+        srcY_q16 = vreinterpretq_s16_u16( vmovl_u8(srcY_d8) );
+
+        /* R channel*/
+        tmp1_q16 = vsubq_s16(srcY_q16, const16_q16);                  /* C = yarr[] - 16*/
+        tmp1_q32 = vmull_s16(vget_low_s16(tmp1_q16), const298_d16);   /* 298 * C*/
+        tmp2_q32 = vmull_s16(vget_high_s16(tmp1_q16), const298_d16);
+
+        tmp1_q16 = vsubq_s16(srcV_q16, const128_q16);                 /* E = uvarr[v] - 128*/
+        tmp3_q32 = vmull_s16(vget_low_s16(tmp1_q16), const409_d16);   /* 409 * E*/
+        tmp4_q32 = vmull_s16(vget_high_s16(tmp1_q16), const409_d16);
+
+        tmp3_q32 = vaddq_s32(tmp1_q32, tmp3_q32);                      /* 298 * C           + 409 * E*/
+        tmp4_q32 = vaddq_s32(tmp2_q32, tmp4_q32);
+
+        tmp1_d16 = vqrshrun_n_s32(tmp3_q32, 8);                       /* clip(( 298 * C           + 409 * E + 128) >> 8)*/
+        tmp2_d16 = vqrshrun_n_s32(tmp4_q32, 8);
+
+        BGRA_d8x4.val[2] = vqmovn_u16(vcombine_u16(tmp1_d16, tmp2_d16));          /* 16bit to 8bit, R channel done!*/
+
+        /* G channel*/
+        tmp3_q32 = vmull_s16(vget_low_s16(tmp1_q16), const208_d16);   /* 208 * E*/
+        tmp4_q32 = vmull_s16(vget_high_s16(tmp1_q16), const208_d16);
+
+        tmp3_q32 = vsubq_s32(tmp1_q32, tmp3_q32);                      /* 298 * C           - 208 * E*/
+        tmp4_q32 = vsubq_s32(tmp2_q32, tmp4_q32);
+
+        tmp1_q16 = vsubq_s16(srcU_q16, const128_q16);                 /* D = uvarr[u] - 128*/
+        tmp5_q32 = vmull_s16(vget_low_s16(tmp1_q16), const100_d16);   /* 100 * D*/
+        tmp6_q32 = vmull_s16(vget_high_s16(tmp1_q16), const100_d16);
+
+        tmp3_q32 = vsubq_s32(tmp3_q32, tmp5_q32);                      /* 298 * C - 100 * D - 208 * E*/
+        tmp4_q32 = vsubq_s32(tmp4_q32, tmp6_q32);
+
+        tmp1_d16 = vqrshrun_n_s32(tmp3_q32, 8);                       /* clip(( 298 * C - 100 * D - 208 * E + 128) >> 8)*/
+        tmp2_d16 = vqrshrun_n_s32(tmp4_q32, 8);
+
+        BGRA_d8x4.val[1] = vqmovn_u16(vcombine_u16(tmp1_d16, tmp2_d16));          /* 16bit to 8bit, G channel done!*/
+
+        /* B channel*/
+        tmp5_q32 = vmull_s16(vget_low_s16(tmp1_q16), const516_d16);   /* 516 * D*/
+        tmp6_q32 = vmull_s16(vget_high_s16(tmp1_q16), const516_d16);
+
+        tmp3_q32 = vaddq_s32(tmp1_q32, tmp5_q32);                      /* 298 * C + 516 * D*/
+        tmp4_q32 = vaddq_s32(tmp2_q32, tmp6_q32);
+
+        tmp1_d16 = vqrshrun_n_s32(tmp3_q32, 8);                       /* clip(( 298 * C + 516 * D           + 128) >> 8)*/
+        tmp2_d16 = vqrshrun_n_s32(tmp4_q32, 8);
+
+        BGRA_d8x4.val[0] = vqmovn_u16(vcombine_u16(tmp1_d16, tmp2_d16));          /* 16bit to 8bit, B channel done!*/
+
+        /* store results*/
+        vst4_u8(RGB + x*4, BGRA_d8x4);
+    }
+}
+
+static void gst_ercolorspace_transform_i420_to_bgra_neon (guint8 * Y, guint8 * U, guint8 * V, const guint width, guint8 * RGB)
+{
+    guint x;
+    uint8x8_t srcY_d8, srcU_d8, srcV_d8, srcUtmp_d8, srcVtmp_d8;
+    int16x8_t const16_q16, const128_q16;
+    int16x4_t const298_d16, const409_d16, const208_d16, const100_d16, const516_d16;
+    int16x8_t srcY_q16, srcU_q16, srcV_q16;
+    int16x8_t tmp1_q16;
+    int32x4_t tmp1_q32, tmp2_q32, tmp3_q32, tmp4_q32, tmp5_q32, tmp6_q32;
+    uint16x4_t tmp1_d16, tmp2_d16;
+    uint8x8x4_t BGRA_d8x4;
+
+    BGRA_d8x4.val[3] = vdup_n_u8(255);
+
+    const16_q16  = vdupq_n_s16(16);
+    const128_q16 = vdupq_n_s16(128);
+    const298_d16 = vdup_n_s16(298);
+    const409_d16 = vdup_n_s16(409);
+    const100_d16 = vdup_n_s16(100);
+    const208_d16 = vdup_n_s16(208);
+    const516_d16 = vdup_n_s16(516);
+
+    for (x = 0; x < width; x+=8)
+    {
+        // Set up input
+        srcY_d8 = vld1_u8(Y + x);
+        srcU_d8 = vld1_u8(U + x/2);     /*load src data U, [u1 u2 u3 u4 u5 u6 u7 u8] */
+        srcV_d8 = vld1_u8(V + x/2);     /*load src data V, [v1 v2 v3 v4 v5 v6 v7 v8] */
+
+        srcU_d8 = vget_low_u8( vmovl_u8(srcU_d8) );          /*8 to 16bit U, [0 u1 0 u2 0 u3 0 u4]*/
+        srcV_d8 = vget_low_u8( vmovl_u8(srcV_d8) );          /*8 to 16bit V, [0 v1 0 v2 0 v3 0 v4]*/
+
+        srcUtmp_d8 = vreinterpret_u8_u16( vshl_n_u16( vreinterpret_u16_u8(srcU_d8), 8) );        /*shift up U, [u1 0 u2 0 u3 0 u4 0]*/
+        srcVtmp_d8 = vreinterpret_u8_u16( vshl_n_u16( vreinterpret_u16_u8(srcV_d8), 8) );        /*shift up V, [v1 0 v2 0 v3 0 v4 0]*/
+
+        srcU_q16 = vreinterpretq_s16_u16( vaddl_u8(srcU_d8, srcUtmp_d8) );     /*add U, [u1 u1 u2 u2 u3 u3 u4 u4]*/
+        srcV_q16 = vreinterpretq_s16_u16( vaddl_u8(srcV_d8, srcVtmp_d8) );     /*add V, [v1 v1 v2 v2 v3 v3 v4 v4]*/
+
+        srcY_q16 = vreinterpretq_s16_u16( vmovl_u8(srcY_d8) );
+
+        /* R channel*/
+        tmp1_q16 = vsubq_s16(srcY_q16, const16_q16);                  /* C = yarr[] - 16*/
+        tmp1_q32 = vmull_s16(vget_low_s16(tmp1_q16), const298_d16);   /* 298 * C*/
+        tmp2_q32 = vmull_s16(vget_high_s16(tmp1_q16), const298_d16);
+
+        tmp1_q16 = vsubq_s16(srcV_q16, const128_q16);                 /* E = uvarr[v] - 128*/
+        tmp3_q32 = vmull_s16(vget_low_s16(tmp1_q16), const409_d16);   /* 409 * E*/
+        tmp4_q32 = vmull_s16(vget_high_s16(tmp1_q16), const409_d16);
+
+        tmp3_q32 = vaddq_s32(tmp1_q32, tmp3_q32);                      /* 298 * C           + 409 * E*/
+        tmp4_q32 = vaddq_s32(tmp2_q32, tmp4_q32);
+
+        tmp1_d16 = vqrshrun_n_s32(tmp3_q32, 8);                       /* clip(( 298 * C           + 409 * E + 128) >> 8)*/
+        tmp2_d16 = vqrshrun_n_s32(tmp4_q32, 8);
+
+        BGRA_d8x4.val[2] = vqmovn_u16(vcombine_u16(tmp1_d16, tmp2_d16));          /* 16bit to 8bit, R channel done!*/
+
+        /* G channel*/
+        tmp3_q32 = vmull_s16(vget_low_s16(tmp1_q16), const208_d16);   /* 208 * E*/
+        tmp4_q32 = vmull_s16(vget_high_s16(tmp1_q16), const208_d16);
+
+        tmp3_q32 = vsubq_s32(tmp1_q32, tmp3_q32);                      /* 298 * C           - 208 * E*/
+        tmp4_q32 = vsubq_s32(tmp2_q32, tmp4_q32);
+
+        tmp1_q16 = vsubq_s16(srcU_q16, const128_q16);                 /* D = uvarr[u] - 128*/
+        tmp5_q32 = vmull_s16(vget_low_s16(tmp1_q16), const100_d16);   /* 100 * D*/
+        tmp6_q32 = vmull_s16(vget_high_s16(tmp1_q16), const100_d16);
+
+        tmp3_q32 = vsubq_s32(tmp3_q32, tmp5_q32);                      /* 298 * C - 100 * D - 208 * E*/
+        tmp4_q32 = vsubq_s32(tmp4_q32, tmp6_q32);
+
+        tmp1_d16 = vqrshrun_n_s32(tmp3_q32, 8);                       /* clip(( 298 * C - 100 * D - 208 * E + 128) >> 8)*/
+        tmp2_d16 = vqrshrun_n_s32(tmp4_q32, 8);
+
+        BGRA_d8x4.val[1] = vqmovn_u16(vcombine_u16(tmp1_d16, tmp2_d16));          /* 16bit to 8bit, G channel done!*/
+
+        /* B channel*/
+        tmp5_q32 = vmull_s16(vget_low_s16(tmp1_q16), const516_d16);   /* 516 * D*/
+        tmp6_q32 = vmull_s16(vget_high_s16(tmp1_q16), const516_d16);
+
+        tmp3_q32 = vaddq_s32(tmp1_q32, tmp5_q32);                      /* 298 * C + 516 * D*/
+        tmp4_q32 = vaddq_s32(tmp2_q32, tmp6_q32);
+
+        tmp1_d16 = vqrshrun_n_s32(tmp3_q32, 8);                       /* clip(( 298 * C + 516 * D           + 128) >> 8)*/
+        tmp2_d16 = vqrshrun_n_s32(tmp4_q32, 8);
+
+        BGRA_d8x4.val[0] = vqmovn_u16(vcombine_u16(tmp1_d16, tmp2_d16));          /* 16bit to 8bit, B channel done!*/
+
+        /* store results*/
+        vst4_u8(RGB + x*4, BGRA_d8x4);
+    }
+}
+
+static void gst_ercolorspace_transform_nv12_to_rgba_neon (guint8 * Y, guint8 * UV, guint8 * RGB, const guint width)
+{
+    guint x;
+    uint8x8_t srcY_d8, srcUV_d8, srcU_d8, srcV_d8, srcUtmp_d8, srcVtmp_d8;
+    int16x8_t const16_q16, const128_q16;
+    int16x4_t const298_d16, const409_d16, const208_d16, const100_d16, const516_d16;
+    int16x8_t srcY_q16, srcU_q16, srcV_q16;
+    int16x8_t tmp1_q16;
+    int32x4_t tmp1_q32, tmp2_q32, tmp3_q32, tmp4_q32, tmp5_q32, tmp6_q32;
+    uint16x4_t tmp1_d16, tmp2_d16;
+    uint8x8x4_t RGBA_d8x4;
+
+    RGBA_d8x4.val[3] = vdup_n_u8(255);
+
+    const16_q16  = vdupq_n_s16(16);
+    const128_q16 = vdupq_n_s16(128);
+    const298_d16 = vdup_n_s16(298);
+    const409_d16 = vdup_n_s16(409);
+    const100_d16 = vdup_n_s16(100);
+    const208_d16 = vdup_n_s16(208);
+    const516_d16 = vdup_n_s16(516);
+
+    for (x = 0; x < width; x+=8)
+    {
+        /* Set up input*/
+        srcY_d8  = vld1_u8(Y + x);
+        srcUV_d8 = vld1_u8(UV + x);              /*load src data UV, [v1 u1 v2 u2 v3 u3 v4 u4] */
+
+        srcV_d8 = vreinterpret_u8_u16( vshr_n_u16( vreinterpret_u16_u8(srcUV_d8), 8) );          /*shift down V, [0 v1 0 v2 0 v3 0 v4]*/
+        srcU_d8 = vreinterpret_u8_u16( vshl_n_u16( vreinterpret_u16_u8(srcUV_d8), 8) );          /*shift up   U, [u1 0 u2 0 u3 0 u4 0]*/
+
+        srcVtmp_d8 = vreinterpret_u8_u16( vshl_n_u16( vreinterpret_u16_u8(srcV_d8), 8) );        /*shift up   V, [v1 0 v2 0 v3 0 v4 0]*/
+        srcUtmp_d8 = vreinterpret_u8_u16( vshr_n_u16( vreinterpret_u16_u8(srcU_d8), 8) );        /*shift down U, [0 u1 0 u2 0 u3 0 u4]*/
+
+        srcV_q16 = vreinterpretq_s16_u16( vaddl_u8(srcV_d8, srcVtmp_d8) );     /*add V, [v1 v1 v2 v2 v3 v3 v4 v4]*/
+        srcU_q16 = vreinterpretq_s16_u16( vaddl_u8(srcU_d8, srcUtmp_d8) );     /*add U, [u1 u1 u2 u2 u3 u3 u4 u4]*/
+
+        srcY_q16 = vreinterpretq_s16_u16( vmovl_u8(srcY_d8) );
+
+        /* R channel*/
+        tmp1_q16 = vsubq_s16(srcY_q16, const16_q16);                  /* C = yarr[] - 16*/
+        tmp1_q32 = vmull_s16(vget_low_s16(tmp1_q16), const298_d16);   /* 298 * C*/
+        tmp2_q32 = vmull_s16(vget_high_s16(tmp1_q16), const298_d16);
+
+        tmp1_q16 = vsubq_s16(srcV_q16, const128_q16);                 /* E = uvarr[v] - 128*/
+        tmp3_q32 = vmull_s16(vget_low_s16(tmp1_q16), const409_d16);   /* 409 * E*/
+        tmp4_q32 = vmull_s16(vget_high_s16(tmp1_q16), const409_d16);
+
+        tmp3_q32 = vaddq_s32(tmp1_q32, tmp3_q32);                      /* 298 * C           + 409 * E*/
+        tmp4_q32 = vaddq_s32(tmp2_q32, tmp4_q32);
+
+        tmp1_d16 = vqrshrun_n_s32(tmp3_q32, 8);                       /* clip(( 298 * C           + 409 * E + 128) >> 8)*/
+        tmp2_d16 = vqrshrun_n_s32(tmp4_q32, 8);
+
+        RGBA_d8x4.val[0] = vqmovn_u16(vcombine_u16(tmp1_d16, tmp2_d16));          /* 16bit to 8bit, R channel done!*/
+
+        /* G channel*/
+        tmp3_q32 = vmull_s16(vget_low_s16(tmp1_q16), const208_d16);   /* 208 * E*/
+        tmp4_q32 = vmull_s16(vget_high_s16(tmp1_q16), const208_d16);
+
+        tmp3_q32 = vsubq_s32(tmp1_q32, tmp3_q32);                      /* 298 * C           - 208 * E*/
+        tmp4_q32 = vsubq_s32(tmp2_q32, tmp4_q32);
+
+        tmp1_q16 = vsubq_s16(srcU_q16, const128_q16);                 /* D = uvarr[u] - 128*/
+        tmp5_q32 = vmull_s16(vget_low_s16(tmp1_q16), const100_d16);   /* 100 * D*/
+        tmp6_q32 = vmull_s16(vget_high_s16(tmp1_q16), const100_d16);
+
+        tmp3_q32 = vsubq_s32(tmp3_q32, tmp5_q32);                      /* 298 * C - 100 * D - 208 * E*/
+        tmp4_q32 = vsubq_s32(tmp4_q32, tmp6_q32);
+
+        tmp1_d16 = vqrshrun_n_s32(tmp3_q32, 8);                       /* clip(( 298 * C - 100 * D - 208 * E + 128) >> 8)*/
+        tmp2_d16 = vqrshrun_n_s32(tmp4_q32, 8);
+
+        RGBA_d8x4.val[1] = vqmovn_u16(vcombine_u16(tmp1_d16, tmp2_d16));          /* 16bit to 8bit, G channel done!*/
+
+        /* B channel*/
+        tmp5_q32 = vmull_s16(vget_low_s16(tmp1_q16), const516_d16);   /* 516 * D*/
+        tmp6_q32 = vmull_s16(vget_high_s16(tmp1_q16), const516_d16);
+
+        tmp3_q32 = vaddq_s32(tmp1_q32, tmp5_q32);                      /* 298 * C + 516 * D*/
+        tmp4_q32 = vaddq_s32(tmp2_q32, tmp6_q32);
+
+        tmp1_d16 = vqrshrun_n_s32(tmp3_q32, 8);                       /* clip(( 298 * C + 516 * D           + 128) >> 8)*/
+        tmp2_d16 = vqrshrun_n_s32(tmp4_q32, 8);
+
+        RGBA_d8x4.val[2] = vqmovn_u16(vcombine_u16(tmp1_d16, tmp2_d16));          /* 16bit to 8bit, B channel done!*/
+
+        /* store results*/
+        vst4_u8(RGB + x*4, RGBA_d8x4);
+    }
+}
+
+static void gst_ercolorspace_transform_nv21_to_rgba_neon (guint8 * Y, guint8 * UV, guint8 * RGB, const guint width)
+{
+    guint x;
+    uint8x8_t srcY_d8, srcUV_d8, srcU_d8, srcV_d8, srcUtmp_d8, srcVtmp_d8;
+    int16x8_t const16_q16, const128_q16;
+    int16x4_t const298_d16, const409_d16, const208_d16, const100_d16, const516_d16;
+    int16x8_t srcY_q16, srcU_q16, srcV_q16;
+    int16x8_t tmp1_q16;
+    int32x4_t tmp1_q32, tmp2_q32, tmp3_q32, tmp4_q32, tmp5_q32, tmp6_q32;
+    uint16x4_t tmp1_d16, tmp2_d16;
+    uint8x8x4_t RGBA_d8x4;
+
+    RGBA_d8x4.val[3] = vdup_n_u8(255);
+
+    const16_q16  = vdupq_n_s16(16);
+    const128_q16 = vdupq_n_s16(128);
+    const298_d16 = vdup_n_s16(298);
+    const409_d16 = vdup_n_s16(409);
+    const100_d16 = vdup_n_s16(100);
+    const208_d16 = vdup_n_s16(208);
+    const516_d16 = vdup_n_s16(516);
+
+    for (x = 0; x < width; x+=8)
+    {
+        // Set up input
+        srcY_d8  = vld1_u8(Y + x);
+        srcUV_d8 = vld1_u8(UV + x);              /*load src data UV, [u1 v1 u2 v2 u3 v3 u4 v4] */
+
+        srcU_d8 = vreinterpret_u8_u16( vshr_n_u16( vreinterpret_u16_u8(srcUV_d8), 8) );          /*shift down U, [0 u1 0 u2 0 u3 0 u4]*/
+        srcV_d8 = vreinterpret_u8_u16( vshl_n_u16( vreinterpret_u16_u8(srcUV_d8), 8) );          /*shift up V,   [v1 0 v2 0 v3 0 v4 0]*/
+
+        srcUtmp_d8 = vreinterpret_u8_u16( vshl_n_u16( vreinterpret_u16_u8(srcU_d8), 8) );        /*shift up   U, [u1 0 u2 0 u3 0 u4 0]*/
+        srcVtmp_d8 = vreinterpret_u8_u16( vshr_n_u16( vreinterpret_u16_u8(srcV_d8), 8) );        /*shift down V, [0 v1 0 v2 0 v3 0 v4]*/
+
+        srcV_q16 = vreinterpretq_s16_u16( vaddl_u8(srcV_d8, srcVtmp_d8) );     /*add V, [v1 v1 v2 v2 v3 v3 v4 v4]*/
+        srcU_q16 = vreinterpretq_s16_u16( vaddl_u8(srcU_d8, srcUtmp_d8) );     /*add U, [u1 u1 u2 u2 u3 u3 u4 u4]*/
+
+        srcY_q16 = vreinterpretq_s16_u16( vmovl_u8(srcY_d8) );
+
+        /* R channel*/
+        tmp1_q16 = vsubq_s16(srcY_q16, const16_q16);                  /* C = yarr[] - 16*/
+        tmp1_q32 = vmull_s16(vget_low_s16(tmp1_q16), const298_d16);   /* 298 * C*/
+        tmp2_q32 = vmull_s16(vget_high_s16(tmp1_q16), const298_d16);
+
+        tmp1_q16 = vsubq_s16(srcV_q16, const128_q16);                 /* E = uvarr[v] - 128*/
+        tmp3_q32 = vmull_s16(vget_low_s16(tmp1_q16), const409_d16);   /* 409 * E*/
+        tmp4_q32 = vmull_s16(vget_high_s16(tmp1_q16), const409_d16);
+
+        tmp3_q32 = vaddq_s32(tmp1_q32, tmp3_q32);                      /* 298 * C           + 409 * E*/
+        tmp4_q32 = vaddq_s32(tmp2_q32, tmp4_q32);
+
+        tmp1_d16 = vqrshrun_n_s32(tmp3_q32, 8);                       /* clip(( 298 * C           + 409 * E + 128) >> 8)*/
+        tmp2_d16 = vqrshrun_n_s32(tmp4_q32, 8);
+
+        RGBA_d8x4.val[0] = vqmovn_u16(vcombine_u16(tmp1_d16, tmp2_d16));          /* 16bit to 8bit, R channel done!*/
+
+        /* G channel*/
+        tmp3_q32 = vmull_s16(vget_low_s16(tmp1_q16), const208_d16);   /* 208 * E*/
+        tmp4_q32 = vmull_s16(vget_high_s16(tmp1_q16), const208_d16);
+
+        tmp3_q32 = vsubq_s32(tmp1_q32, tmp3_q32);                      /* 298 * C           - 208 * E*/
+        tmp4_q32 = vsubq_s32(tmp2_q32, tmp4_q32);
+
+        tmp1_q16 = vsubq_s16(srcU_q16, const128_q16);                 /* D = uvarr[u] - 128*/
+        tmp5_q32 = vmull_s16(vget_low_s16(tmp1_q16), const100_d16);   /* 100 * D*/
+        tmp6_q32 = vmull_s16(vget_high_s16(tmp1_q16), const100_d16);
+
+        tmp3_q32 = vsubq_s32(tmp3_q32, tmp5_q32);                      /* 298 * C - 100 * D - 208 * E*/
+        tmp4_q32 = vsubq_s32(tmp4_q32, tmp6_q32);
+
+        tmp1_d16 = vqrshrun_n_s32(tmp3_q32, 8);                       /* clip(( 298 * C - 100 * D - 208 * E + 128) >> 8)*/
+        tmp2_d16 = vqrshrun_n_s32(tmp4_q32, 8);
+
+        RGBA_d8x4.val[1] = vqmovn_u16(vcombine_u16(tmp1_d16, tmp2_d16));          /* 16bit to 8bit, G channel done!*/
+
+        /* B channel*/
+        tmp5_q32 = vmull_s16(vget_low_s16(tmp1_q16), const516_d16);   /* 516 * D*/
+        tmp6_q32 = vmull_s16(vget_high_s16(tmp1_q16), const516_d16);
+
+        tmp3_q32 = vaddq_s32(tmp1_q32, tmp5_q32);                      /* 298 * C + 516 * D*/
+        tmp4_q32 = vaddq_s32(tmp2_q32, tmp6_q32);
+
+        tmp1_d16 = vqrshrun_n_s32(tmp3_q32, 8);                       /* clip(( 298 * C + 516 * D           + 128) >> 8)*/
+        tmp2_d16 = vqrshrun_n_s32(tmp4_q32, 8);
+
+        RGBA_d8x4.val[2] = vqmovn_u16(vcombine_u16(tmp1_d16, tmp2_d16));          /* 16bit to 8bit, B channel done!*/
+
+        /* store results*/
+        vst4_u8(RGB + x*4, RGBA_d8x4);
+    }
+}
+
+static void gst_ercolorspace_transform_i420_to_rgba_neon (guint8 * Y, guint8 * U, guint8 * V, const guint width, guint8 * RGB)
+{
+    guint x;
+    uint8x8_t srcY_d8, srcU_d8, srcV_d8, srcUtmp_d8, srcVtmp_d8;
+    int16x8_t const16_q16, const128_q16;
+    int16x4_t const298_d16, const409_d16, const208_d16, const100_d16, const516_d16;
+    int16x8_t srcY_q16, srcU_q16, srcV_q16;
+    int16x8_t tmp1_q16;
+    int32x4_t tmp1_q32, tmp2_q32, tmp3_q32, tmp4_q32, tmp5_q32, tmp6_q32;
+    uint16x4_t tmp1_d16, tmp2_d16;
+    uint8x8x4_t RGBA_d8x4;
+
+    RGBA_d8x4.val[3] = vdup_n_u8(255);
+
+    const16_q16  = vdupq_n_s16(16);
+    const128_q16 = vdupq_n_s16(128);
+    const298_d16 = vdup_n_s16(298);
+    const409_d16 = vdup_n_s16(409);
+    const100_d16 = vdup_n_s16(100);
+    const208_d16 = vdup_n_s16(208);
+    const516_d16 = vdup_n_s16(516);
+
+    for (x = 0; x < width; x+=8)
+    {
+        // Set up input
+        srcY_d8 = vld1_u8(Y + x);
+        srcU_d8 = vld1_u8(U + x/2);     /*load src data U, [u1 u2 u3 u4 u5 u6 u7 u8] */
+        srcV_d8 = vld1_u8(V + x/2);     /*load src data V, [v1 v2 v3 v4 v5 v6 v7 v8] */
+
+        srcU_d8 = vget_low_u8( vmovl_u8(srcU_d8) );          /*8 to 16bit U, [0 u1 0 u2 0 u3 0 u4]*/
+        srcV_d8 = vget_low_u8( vmovl_u8(srcV_d8) );          /*8 to 16bit V, [0 v1 0 v2 0 v3 0 v4]*/
+
+        srcUtmp_d8 = vreinterpret_u8_u16( vshl_n_u16( vreinterpret_u16_u8(srcU_d8), 8) );        /*shift up U, [u1 0 u2 0 u3 0 u4 0]*/
+        srcVtmp_d8 = vreinterpret_u8_u16( vshl_n_u16( vreinterpret_u16_u8(srcV_d8), 8) );        /*shift up V, [v1 0 v2 0 v3 0 v4 0]*/
+
+        srcU_q16 = vreinterpretq_s16_u16( vaddl_u8(srcU_d8, srcUtmp_d8) );     /*add U, [u1 u1 u2 u2 u3 u3 u4 u4]*/
+        srcV_q16 = vreinterpretq_s16_u16( vaddl_u8(srcV_d8, srcVtmp_d8) );     /*add V, [v1 v1 v2 v2 v3 v3 v4 v4]*/
+
+        srcY_q16 = vreinterpretq_s16_u16( vmovl_u8(srcY_d8) );
+
+        /* R channel*/
+        tmp1_q16 = vsubq_s16(srcY_q16, const16_q16);                  /* C = yarr[] - 16*/
+        tmp1_q32 = vmull_s16(vget_low_s16(tmp1_q16), const298_d16);   /* 298 * C*/
+        tmp2_q32 = vmull_s16(vget_high_s16(tmp1_q16), const298_d16);
+
+        tmp1_q16 = vsubq_s16(srcV_q16, const128_q16);                 /* E = uvarr[v] - 128*/
+        tmp3_q32 = vmull_s16(vget_low_s16(tmp1_q16), const409_d16);   /* 409 * E*/
+        tmp4_q32 = vmull_s16(vget_high_s16(tmp1_q16), const409_d16);
+
+        tmp3_q32 = vaddq_s32(tmp1_q32, tmp3_q32);                      /* 298 * C           + 409 * E*/
+        tmp4_q32 = vaddq_s32(tmp2_q32, tmp4_q32);
+
+        tmp1_d16 = vqrshrun_n_s32(tmp3_q32, 8);                       /* clip(( 298 * C           + 409 * E + 128) >> 8)*/
+        tmp2_d16 = vqrshrun_n_s32(tmp4_q32, 8);
+
+        RGBA_d8x4.val[0] = vqmovn_u16(vcombine_u16(tmp1_d16, tmp2_d16));          /* 16bit to 8bit, R channel done!*/
+
+        /* G channel*/
+        tmp3_q32 = vmull_s16(vget_low_s16(tmp1_q16), const208_d16);   /* 208 * E*/
+        tmp4_q32 = vmull_s16(vget_high_s16(tmp1_q16), const208_d16);
+
+        tmp3_q32 = vsubq_s32(tmp1_q32, tmp3_q32);                      /* 298 * C           - 208 * E*/
+        tmp4_q32 = vsubq_s32(tmp2_q32, tmp4_q32);
+
+        tmp1_q16 = vsubq_s16(srcU_q16, const128_q16);                 /* D = uvarr[u] - 128*/
+        tmp5_q32 = vmull_s16(vget_low_s16(tmp1_q16), const100_d16);   /* 100 * D*/
+        tmp6_q32 = vmull_s16(vget_high_s16(tmp1_q16), const100_d16);
+
+        tmp3_q32 = vsubq_s32(tmp3_q32, tmp5_q32);                      /* 298 * C - 100 * D - 208 * E*/
+        tmp4_q32 = vsubq_s32(tmp4_q32, tmp6_q32);
+
+        tmp1_d16 = vqrshrun_n_s32(tmp3_q32, 8);                       /* clip(( 298 * C - 100 * D - 208 * E + 128) >> 8)*/
+        tmp2_d16 = vqrshrun_n_s32(tmp4_q32, 8);
+
+        RGBA_d8x4.val[1] = vqmovn_u16(vcombine_u16(tmp1_d16, tmp2_d16));          /* 16bit to 8bit, G channel done!*/
+
+        /* B channel*/
+        tmp5_q32 = vmull_s16(vget_low_s16(tmp1_q16), const516_d16);   /* 516 * D*/
+        tmp6_q32 = vmull_s16(vget_high_s16(tmp1_q16), const516_d16);
+
+        tmp3_q32 = vaddq_s32(tmp1_q32, tmp5_q32);                      /* 298 * C + 516 * D*/
+        tmp4_q32 = vaddq_s32(tmp2_q32, tmp6_q32);
+
+        tmp1_d16 = vqrshrun_n_s32(tmp3_q32, 8);                       /* clip(( 298 * C + 516 * D           + 128) >> 8)*/
+        tmp2_d16 = vqrshrun_n_s32(tmp4_q32, 8);
+
+        RGBA_d8x4.val[2] = vqmovn_u16(vcombine_u16(tmp1_d16, tmp2_d16));          /* 16bit to 8bit, B channel done!*/
+
+        /* store results*/
+        vst4_u8(RGB + x*4, RGBA_d8x4);
+    }
+}
+
+static void gst_ercolorspace_transform_nv12_to_i420_neon (guint8 * UV, const guint size, guint8 * OU, guint8 * OV)
+{
+    guint x;
+    uint8x8x2_t src_d8x2;
+    for (x = 0; x < size; x+=16)
+    {
+        src_d8x2 = vld2_u8(UV + x); /* Load and deinterlace source*/
+
+        vst1_u8 (OU + x/2, src_d8x2.val[0]);
+        vst1_u8 (OV + x/2, src_d8x2.val[1]);
+    }
+}
+
+static void gst_ercolorspace_transform_nv21_to_i420_neon (guint8 * UV, const guint size, guint8 * OU, guint8 * OV)
+{
+    guint x;
+    uint8x8x2_t src_d8x2;
+    for (x = 0; x < size; x+=16)
+    {
+        src_d8x2 = vld2_u8(UV + x); /* Load and deinterlace source*/
+
+        vst1_u8 (OU + x/2, src_d8x2.val[1]);
+        vst1_u8 (OV + x/2, src_d8x2.val[0]);
+    }
+}
+
 
 static GstCaps *
 transform_structure_for_format (const GstStructure * str, GstPadDirection direction, const gchar * format)

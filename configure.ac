@@ -79,23 +79,6 @@ if test "x$with_sctp" != "xyes"; then
   AC_MSG_ERROR([You need libusrsctp for the build])
 fi
 
-dnl check for openssl
-AC_MSG_CHECKING([whether to build erdtls])
-AC_ARG_ENABLE(
-  erdtls,
-  AC_HELP_STRING(
-    [--enable-erdtls],
-    [build erdtls plugin @<:@default=no@:>@]),
-  [AS_CASE(
-    [$enableval], [no], [], [yes], [],
-    [AC_MSG_ERROR([bad value "$enableval" for --enable-erdtls])])],
-  [enable_erdtls=no])
-AC_MSG_RESULT([$enable_erdtls])
-if test "x$enable_erdtls" = xyes; then
-  PKG_CHECK_MODULES(OPENSSL, [openssl])
-fi
-AM_CONDITIONAL(ERDTLS, test x$enable_erdtls = xyes)
-
 dnl build static plugins or not
 AC_MSG_CHECKING([whether to build static plugins or not])
 AC_ARG_ENABLE(
@@ -257,7 +240,7 @@ GST_PLUGIN_LDFLAGS='-module -avoid-version -export-symbols-regex [_]*\(gst_\|Gst
 AC_SUBST(GST_PLUGIN_LDFLAGS)
 
 AC_CONFIG_FILES([Makefile gst-libs/Makefile gst-libs/gst/Makefile
-                 gst-libs/gst/sctp/Makefile ext/Makefile ext/erdtls/Makefile
+                 gst-libs/gst/sctp/Makefile ext/Makefile
                  ext/sctp/Makefile gst/Makefile sys/Makefile
                  gst/videorepair/Makefile gstreamer-sctp-1.0.pc])
 AC_OUTPUT

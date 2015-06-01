@@ -435,7 +435,11 @@ static void gst_sctp_enc_srcpad_loop(GstPad *pad)
         GstCaps *caps;
 
         g_snprintf(s_id, sizeof(s_id), "sctpenc-%08x", g_random_int());
-        gst_pad_push_event(self->src_pad, gst_event_new_stream_start(s_id));
+
+        if (!gst_pad_push_event(self->src_pad, gst_event_new_stream_start(s_id))) {
+	  GST_WARNING_OBJECT (self->src_pad, "Sending stream start event failed");
+	  return;
+	}
 
         caps = gst_caps_new_empty_simple("application/x-sctp");
         gst_pad_set_caps(self->src_pad, caps);

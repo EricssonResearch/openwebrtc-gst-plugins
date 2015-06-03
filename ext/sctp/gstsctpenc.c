@@ -129,8 +129,6 @@ static void gst_sctp_enc_set_property(GObject *object, guint prop_id, const GVal
     GParamSpec *pspec);
 static void gst_sctp_enc_get_property(GObject *object, guint prop_id, GValue *value,
     GParamSpec *pspec);
-static GstStateChangeReturn gst_sctp_enc_change_state(GstElement *element,
-    GstStateChange transition);
 static GstPad *gst_sctp_enc_request_new_pad(GstElement *element, GstPadTemplate *template,
     const gchar *name, const GstCaps *caps);
 static void gst_sctp_enc_release_pad(GstElement *element, GstPad *pad);
@@ -171,7 +169,6 @@ static void gst_sctp_enc_class_init(GstSctpEncClass *klass)
     gobject_class->set_property = GST_DEBUG_FUNCPTR(gst_sctp_enc_set_property);
     gobject_class->get_property = GST_DEBUG_FUNCPTR(gst_sctp_enc_get_property);
 
-    element_class->change_state = GST_DEBUG_FUNCPTR(gst_sctp_enc_change_state);
     element_class->request_new_pad = GST_DEBUG_FUNCPTR(gst_sctp_enc_request_new_pad);
     element_class->release_pad = GST_DEBUG_FUNCPTR(gst_sctp_enc_release_pad);
 
@@ -234,6 +231,34 @@ static void data_queue_full_cb(GstDataQueue *queue, gpointer user_data)
 {
 }
 
+static gboolean
+gst_sctp_enc_src_activate_mode (GstPad * pad, GstObject * parent,
+    GstPadMode mode, gboolean active)
+{
+  GstSctpEnc *self = GST_SCTP_ENC(parent);
+  gboolean ret = FALSE;
+
+  switch (mode) {
+    case GST_PAD_MODE_PUSH:
+      if (active) {
+        self->need_segment = self->need_stream_start_caps = TRUE;
+        gst_data_queue_set_flushing(self->outbound_sctp_packet_queue, FALSE);
+        gst_pad_start_task(self->src_pad,
+            (GstTaskFunction)gst_sctp_enc_srcpad_loop, self->src_pad, NULL);
+        ret = configure_association(self);
+      } else {
+        sctpenc_cleanup(self);
+	ret = TRUE;
+      }
+      GST_DEBUG_OBJECT (self, "activate_mode: active %d, ret %d", active, ret);
+      break;
+    default:
+      break;
+  }
+
+  return ret;
+}
+
 static void gst_sctp_enc_init(GstSctpEnc *self)
 {
     self->sctp_association_id = DEFAULT_GST_SCTP_ASSOCIATION_ID;
@@ -246,6 +271,9 @@ static void gst_sctp_enc_init(GstSctpEnc *self)
     self->src_pad = gst_pad_new_from_static_template(&src_template, "src");
     gst_pad_set_event_function(self->src_pad,
         GST_DEBUG_FUNCPTR((GstPadEventFunction)gst_sctp_enc_src_event));
+    gst_pad_set_activatemode_function (self->src_pad,
+      GST_DEBUG_FUNCPTR (gst_sctp_enc_src_activate_mode));
+
     gst_element_add_pad(GST_ELEMENT(self), self->src_pad);
 
     g_queue_init(&self->pending_pads);
@@ -301,44 +329,6 @@ static void gst_sctp_enc_get_property(GObject *object, guint prop_id, GValue *va
         G_OBJECT_WARN_INVALID_PROPERTY_ID(self, prop_id, pspec);
         break;
     }
-}
-
-static GstStateChangeReturn gst_sctp_enc_change_state(GstElement *element,
-    GstStateChange transition)
-{
-    GstSctpEnc *self = GST_SCTP_ENC(element);
-    GstStateChangeReturn ret = GST_STATE_CHANGE_FAILURE;
-    gboolean res = TRUE;
-
-    switch (transition) {
-    case GST_STATE_CHANGE_NULL_TO_READY:
-        break;
-
-    case GST_STATE_CHANGE_READY_TO_PAUSED:
-        self->need_segment = self->need_stream_start_caps = TRUE;
-        gst_data_queue_set_flushing(self->outbound_sctp_packet_queue, FALSE);
-        gst_pad_start_task(self->src_pad, (GstTaskFunction)gst_sctp_enc_srcpad_loop, self->src_pad,
-            NULL);
-        res = configure_association(self);
-        break;
-
-    case GST_STATE_CHANGE_PLAYING_TO_PAUSED:
-        break;
-
-    case GST_STATE_CHANGE_PAUSED_TO_READY:
-        sctpenc_cleanup(self);
-        break;
-
-    case GST_STATE_CHANGE_READY_TO_NULL:
-        break;
-    default:
-        break;
-    }
-
-    if (res)
-        ret = GST_ELEMENT_CLASS(parent_class)->change_state(element, transition);
-
-    return ret;
 }
 
 static GstPad * gst_sctp_enc_request_new_pad(GstElement *element, GstPadTemplate *template,

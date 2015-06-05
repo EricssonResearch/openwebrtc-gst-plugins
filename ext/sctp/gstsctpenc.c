@@ -782,7 +782,6 @@ static void sctpenc_cleanup(GstSctpEnc *self)
 {
     GstIterator *it;
 
-    gst_sctp_association_set_on_packet_out(self->sctp_association, NULL, NULL);
     g_signal_handler_disconnect(self->sctp_association, self->signal_handler_state_changed);
     stop_srcpad_task(self->src_pad, self);
     gst_sctp_association_force_close(self->sctp_association);

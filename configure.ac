@@ -242,6 +242,6 @@ AC_SUBST(GST_PLUGIN_LDFLAGS)
 AC_CONFIG_FILES([Makefile gst-libs/Makefile gst-libs/gst/Makefile
                  gst-libs/gst/sctp/Makefile ext/Makefile
                  ext/sctp/Makefile gst/Makefile sys/Makefile
-                 gst/videorepair/Makefile gstreamer-sctp-1.0.pc
-                 gstreamer-sctp-1.0-uninstalled.pc])
+                 gst/scream/Makefile gst/videorepair/Makefile
+                 gstreamer-sctp-1.0.pc gstreamer-sctp-1.0-uninstalled.pc])
 AC_OUTPUT

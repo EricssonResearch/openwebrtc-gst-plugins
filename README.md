@@ -10,4 +10,5 @@ Plugins in this repository:
 
 Plugins now moved to GStreamer:
 
+* *erdtls* - DTLS-SRTP, renamed to gstdtls
 * *openh264* - [OpenH264](http://www.openh264.org) decoder and encoder

@@ -288,10 +288,7 @@ static void gst_scream_queue_init(GstScreamQueue *self)
         (GstDataQueueEmptyCallback)data_queue_empty_cb, self);
     self->number_of_approved_packets = 0;
 
-    self->incoming_packets = gst_data_queue_new(
-        (GstDataQueueCheckFullFunction)data_queue_check_full_cb,
-        (GstDataQueueFullCallback)data_queue_full_cb,
-        (GstDataQueueEmptyCallback)data_queue_empty_cb, self);
+    self->incoming_packets = g_async_queue_new();
 
     self->priority = DEFAULT_PRIORITY;
     self->pass_through = DEFAULT_PASS_THROUGH;
@@ -309,11 +306,11 @@ static void gst_scream_queue_finalize(GObject *object)
     }
     gst_object_unref(self->approved_packets);
 
-    while (!gst_data_queue_is_empty(self->incoming_packets)) {
-        gst_data_queue_pop(self->incoming_packets, &item);
+    while(item = (GstDataQueueItem *)g_async_queue_try_pop(self->incoming_packets)) {
         item->destroy(item);
     }
-    gst_object_unref(self->incoming_packets);
+
+    g_async_queue_unref(self->incoming_packets);
 
     g_hash_table_unref(self->streams);
     g_hash_table_unref(self->adapted_stream_ids);
@@ -441,10 +438,8 @@ static GstFlowReturn gst_scream_queue_sink_chain(GstPad *pad, GstObject *parent,
         goto end;
     }
 
-    if (G_UNLIKELY(!gst_data_queue_push(self->incoming_packets, (GstDataQueueItem *)rtp_item))) {
-        g_log(G_LOG_DOMAIN, G_LOG_LEVEL_DEBUG, "Failed pusing RTP packet to incoming packet queue. flushing?");
-        ((GstDataQueueItem *)rtp_item)->destroy(rtp_item);
-    }
+    g_async_queue_push(self->incoming_packets, (gpointer)rtp_item);
+
 end:
     flow_ret = GST_PAD_IS_FLUSHING(pad) ? GST_FLOW_FLUSHING : flow_ret;
     return flow_ret;
@@ -526,9 +521,8 @@ static void gst_scream_queue_srcpad_loop(GstScreamQueue *self)
     }
     self->next_approve_time = time_now_us + time_until_next_approve;
 
-    if (!gst_data_queue_pop(self->incoming_packets, (GstDataQueueItem **)&item)) {
-        /* flushing */
-        g_warning("Failed to pop from incoming packets queue. Flushing?");
+    item = (GstDataQueueItem *)g_async_queue_timeout_pop(self->incoming_packets, time_until_next_approve);
+    if (!item) {
         goto end;
     }
 
@@ -732,9 +726,7 @@ static void gst_scream_queue_incoming_feedback(GstScreamQueue *self, guint ssrc,
     rtcp_item->timestamp = timestamp;
     rtcp_item->qbit = qbit;
 
-    if (G_UNLIKELY(!gst_data_queue_push(self->incoming_packets, (GstDataQueueItem *)rtcp_item))) {
-        ((GstDataQueueItem *)rtcp_item)->destroy(rtcp_item);
-    }
+    g_async_queue_push(self->incoming_packets, (gpointer)rtcp_item);
 }
 
 static guint64 get_gst_time_us(GstScreamQueue *self)

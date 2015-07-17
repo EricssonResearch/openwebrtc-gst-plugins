@@ -58,7 +58,8 @@ struct _GstScreamQueue {
     GHashTable *adapted_stream_ids;
     GHashTable *ignored_stream_ids;
 
-    GstDataQueue *incoming_packets;
+    /*GstDataQueue *incoming_packets;*/
+    GAsyncQueue *incoming_packets;
     GstDataQueue *approved_packets;
     guint number_of_approved_packets;
     guint64 next_approve_time;

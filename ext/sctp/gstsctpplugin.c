@@ -47,4 +47,4 @@ GST_PLUGIN_DEFINE(
     PACKAGE_VERSION,
     "BSD",
     "OpenWebRTC GStreamer plugins",
-    "http://www.openwebrtc.io/")
+    "http://www.openwebrtc.org/")

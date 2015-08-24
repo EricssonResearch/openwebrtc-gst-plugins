@@ -726,7 +726,7 @@ static void handle_stream_reset_event(GstSctpAssociation *self,
 {
     guint32 i, n;
     if (!(sr->strreset_flags & SCTP_STREAM_RESET_DENIED) &&
-        !(sr->strreset_flags & SCTP_STREAM_RESET_DENIED )) {
+        !(sr->strreset_flags & SCTP_STREAM_RESET_FAILED )) {
         n = (sr->strreset_length - sizeof(struct sctp_stream_reset_event)) / sizeof(uint16_t);
         for (i = 0; i < n; i++) {
             if (sr->strreset_flags & SCTP_STREAM_RESET_INCOMING_SSN) {

@@ -160,6 +160,8 @@ static void gst_sctp_association_init (GstSctpAssociation *self)
     if (number_of_associations == 0) {
         usrsctp_init(0, sctp_packet_out, g_print);
 
+        usrsctp_sysctl_set_sctp_blackhole(2);
+
         /* Explicit Congestion Notification */
         usrsctp_sysctl_set_sctp_ecn_enable(0);
 

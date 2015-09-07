@@ -573,7 +573,9 @@ static gpointer connection_thread_func(GstSctpAssociation *self)
 }
 
 static gboolean client_role_connect(GstSctpAssociation *self) {
+    struct sctp_paddrparams paddrparams;
     struct sockaddr_conn addr;
+    socklen_t opt_len;
     gint ret;
 
     g_mutex_lock(&self->association_mutex);
@@ -590,6 +592,31 @@ static gboolean client_role_connect(GstSctpAssociation *self) {
         g_warning("usrsctp_connect() error: (%u) %s", errno, strerror(errno));
         goto error;
     }
+
+    memset(&paddrparams, 0, sizeof(struct sctp_paddrparams));
+    memcpy(&paddrparams.spp_address, &addr, sizeof(struct sockaddr_conn));
+
+    opt_len = (socklen_t)sizeof(struct sctp_paddrparams);
+    ret = usrsctp_getsockopt(self->sctp_ass_sock, IPPROTO_SCTP, SCTP_PEER_ADDR_PARAMS, &paddrparams, &opt_len);
+    if (ret < 0) {
+        g_warning("usrsctp_getsockopt() error: (%u) %s", errno, strerror(errno));
+        goto error;
+    }
+
+    // draft-ietf-rtcweb-data-channel-13 section 5: max initial MTU IPV4 1200, IPV6 1280
+    paddrparams.spp_pathmtu = 1200; // safe for either
+    paddrparams.spp_flags &= ~SPP_PMTUD_ENABLE;
+    paddrparams.spp_flags |= SPP_PMTUD_DISABLE;
+    opt_len = (socklen_t)sizeof(struct sctp_paddrparams);
+
+    ret = usrsctp_setsockopt(self->sctp_ass_sock, IPPROTO_SCTP, SCTP_PEER_ADDR_PARAMS, &paddrparams, opt_len);
+    if (ret < 0) {
+        g_warning("usrsctp_setsockopt() error: (%u) %s", errno, strerror(errno));
+        goto error;
+    }
+
+    g_log(G_LOG_DOMAIN, G_LOG_LEVEL_INFO, "usrsctp: PMTUD disabled, MTU set to %u", paddrparams.spp_pathmtu);
+
     g_mutex_unlock(&self->association_mutex);
     return TRUE;
 error:

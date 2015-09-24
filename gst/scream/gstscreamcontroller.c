@@ -309,7 +309,7 @@ static void gst_scream_controller_init (GstScreamController *self)
     self->streams = g_hash_table_new_full(NULL, NULL, NULL, (GDestroyNotify)g_free);
 
 
-    /*g_mutex_init(&self->lock);*/
+    g_mutex_init(&self->lock);
 
 }
 

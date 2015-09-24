@@ -306,7 +306,7 @@ static void gst_scream_queue_finalize(GObject *object)
     }
     gst_object_unref(self->approved_packets);
 
-    while(item = (GstDataQueueItem *)g_async_queue_try_pop(self->incoming_packets)) {
+    while ((item = (GstDataQueueItem *)g_async_queue_try_pop(self->incoming_packets))) {
         item->destroy(item);
     }
 
@@ -521,7 +521,7 @@ static void gst_scream_queue_srcpad_loop(GstScreamQueue *self)
     }
     self->next_approve_time = time_now_us + time_until_next_approve;
 
-    item = (GstDataQueueItem *)g_async_queue_timeout_pop(self->incoming_packets, time_until_next_approve);
+    item = (GstScreamDataQueueItem *)g_async_queue_timeout_pop(self->incoming_packets, time_until_next_approve);
     if (!item) {
         goto end;
     }

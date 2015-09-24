@@ -188,7 +188,7 @@ static void gst_scream_queue_class_init(GstScreamQueueClass *klass)
         g_param_spec_uint("scream-controller-id",
             "SCReAM Controller ID",
             "Every queue that should be handled by the same controller should have the same "
-            "scream-controller-id. This value must be set before any pads are requested.",
+            "scream-controller-id. This value must be set before going to PAUSED.",
             0, G_MAXUINT, DEFAULT_GST_SCREAM_CONTROLLER_ID,
             G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);
 

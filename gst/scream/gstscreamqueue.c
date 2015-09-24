@@ -376,7 +376,7 @@ static GstStateChangeReturn gst_scream_queue_change_state(GstElement *element,
             self, NULL);
 
         } else {
-            g_warning("Failed to change state!");
+            GST_WARNING_OBJECT(self, "Failed to change state!");
             res = FALSE;
         }
         break;
@@ -502,7 +502,7 @@ static void gst_scream_queue_srcpad_loop(GstScreamQueue *self)
     while (!gst_data_queue_is_empty(self->approved_packets)) {
         if (G_UNLIKELY(!gst_data_queue_pop(self->approved_packets,
             (GstDataQueueItem **)&rtp_item))) {
-            g_warning("Failed to pop from approved packets queue. Flushing?");
+            GST_WARNING_OBJECT(self, "Failed to pop from approved packets queue. Flushing?");
             goto end; /* flushing */
         }
 
@@ -543,7 +543,7 @@ static void gst_scream_queue_srcpad_loop(GstScreamQueue *self)
                 gst_scream_controller_new_rtp_packet(self->scream_controller, stream_id, rtp_item->rtp_ts,
                     rtp_item->enqueued_time, stream->enqueued_payload_size, rtp_item->rtp_payload_size);
             } else {
-                g_log(G_LOG_DOMAIN, G_LOG_LEVEL_DEBUG, "Failed pusing RTP packet to the stream packet queue. flushing?");
+                GST_DEBUG_OBJECT(self, "Failed pushing RTP packet to the stream packet queue. flushing?");
                 ((GstDataQueueItem *)rtp_item)->destroy(rtp_item);
             }
         }
@@ -577,7 +577,7 @@ static GstScreamStream * get_stream(GstScreamQueue *self, guint ssrc, guint pt)
     } else {
         g_signal_emit_by_name(self, "on-payload-adaptation-request", pt, &adapt_stream);
         if (!adapt_stream) {
-            g_log(G_LOG_DOMAIN, G_LOG_LEVEL_DEBUG, "Ignoring adaptation for payload %u for ssrc %u", pt, stream_id);
+            GST_DEBUG_OBJECT(self, "Ignoring adaptation for payload %u for ssrc %u", pt, stream_id);
             g_hash_table_add(self->ignored_stream_ids, GUINT_TO_POINTER(stream_id));
         } else {
             if (gst_scream_controller_register_new_stream(self->scream_controller,
@@ -602,7 +602,7 @@ static GstScreamStream * get_stream(GstScreamQueue *self, guint ssrc, guint pt)
                 g_rw_lock_writer_unlock(&self->lock);
                 g_hash_table_add(self->adapted_stream_ids, GUINT_TO_POINTER(stream_id));
             } else {
-                g_warning("Failed to register new stream\n");
+                GST_WARNING_OBJECT(self, "Failed to register new stream\n");
             }
         }
     }
@@ -635,7 +635,7 @@ static gboolean configure(GstScreamQueue *self) {
         self->scream_controller = controller;
     } else {
         res = FALSE;
-        g_warning("Could not create Scream Controller");
+        GST_WARNING_OBJECT(self, "Could not create Scream Controller");
     }
 
     return res;

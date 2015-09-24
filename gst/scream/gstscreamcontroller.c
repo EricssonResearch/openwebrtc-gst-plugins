@@ -31,6 +31,7 @@
 
 #include <math.h>
 
+#include <gst/gstinfo.h>
 
 /* Timestamp sampling rate for SCReAM feedback*/
 #define TIMESTAMP_RATE 1000.0f
@@ -937,8 +938,8 @@ static void update_target_stream_bitrate(GstScreamController *self, ScreamStream
         increment = 0.0f;
         if (stream->tx_size_bits_avg / MAX(br,stream->target_bitrate) > MAX_RTP_QUEUE_TIME &&
             time_us - stream->t_last_rtp_q_clear_us > 5 * MAX_RTP_QUEUE_TIME * 1000000) {
-            g_log(G_LOG_DOMAIN, G_LOG_LEVEL_DEBUG, "Target bitrate :  RTP queue delay ~ %f."
-                " Clear RTP queue \n", stream->tx_size_bits_avg / MAX(br,stream->target_bitrate));
+            GST_DEBUG("Target bitrate :  RTP queue delay ~ %f. Clear RTP queue \n",
+                    stream->tx_size_bits_avg / MAX(br,stream->target_bitrate));
             stream->target_bitrate = stream->min_bitrate;
             stream->next_packet_size = 0;
             stream->bytes_in_queue = 0;
@@ -1031,7 +1032,7 @@ static void update_target_stream_bitrate(GstScreamController *self, ScreamStream
     if (self->n_acc_bytes_in_flight_max > 0) {
         in_fl = self->acc_bytes_in_flight_max/self->n_acc_bytes_in_flight_max;
     }
-    g_log(G_LOG_DOMAIN, G_LOG_LEVEL_DEBUG, "Target br adj : "
+    GST_DEBUG("Target br adj : "
             "target(actual)=%4.0f(%4.0f,%4.0f,%4.0f)k rtpQ=%4.0fms cwnd=%5u(%5u) srtt=%3.0fms "
             "owd(T)=%3.0f(%3.0f)ms fs=%u dt=%3.0f\n",
             stream->target_bitrate/1000.0f,
@@ -1118,7 +1119,7 @@ void gst_scream_controller_incoming_feedback(GstScreamController *self, guint st
         /*
         * The loss counter has increased
         */
-        g_log(G_LOG_DOMAIN, G_LOG_LEVEL_DEBUG, "Scream detected %u losses. highest seq is %u\n",
+        GST_DEBUG("Scream detected %u losses. highest seq is %u\n",
             n_loss-stream->n_loss,highest_seq);
         stream->n_loss = n_loss;
         if (time_us - self->last_loss_event_t_us > self->srtt_us) {

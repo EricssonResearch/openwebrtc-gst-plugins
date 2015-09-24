@@ -105,6 +105,8 @@
 GST_DEBUG_CATEGORY_STATIC(gst_scream_controller_debug_category);
 #define GST_CAT_DEFAULT gst_scream_controller_debug_category
 */
+GST_DEBUG_CATEGORY_EXTERN(gst_scream_queue_debug_category);
+#define GST_CAT_DEFAULT gst_scream_queue_debug_category
 
 G_DEFINE_TYPE(GstScreamController, gst_scream_controller, G_TYPE_OBJECT);
 

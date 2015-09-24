@@ -31,7 +31,7 @@
 #include <gst/rtp/gstrtpbuffer.h>
 #include <gst/video/video.h>
 
-GST_DEBUG_CATEGORY_STATIC(gst_scream_queue_debug_category);
+GST_DEBUG_CATEGORY(gst_scream_queue_debug_category);
 #define GST_CAT_DEFAULT gst_scream_queue_debug_category
 
 #define gst_scream_queue_parent_class parent_class

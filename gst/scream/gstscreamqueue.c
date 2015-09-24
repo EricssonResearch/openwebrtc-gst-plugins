@@ -556,12 +556,12 @@ static GstScreamStream * get_stream(GstScreamQueue *self, guint ssrc, guint pt)
             g_hash_table_add(self->ignored_stream_ids, GUINT_TO_POINTER(stream_id));
         } else {
             if (gst_scream_controller_register_new_stream(self->scream_controller,
-                stream_id, self->priority, SCREAM_MIN_BITRATE, SCREAM_MAX_BITRATE,
-                (GstScreamQueueBitrateRequestedCb)on_bitrate_change,
-                (GstScreamQueueNextPacketSizeCb)get_next_packet_rtp_payload_size,
-                (GstScreamQueueApproveTransmitCb)approve_transmit_cb,
-                (GstScreamQueueClearQueueCb)clear_queue,
-                (gpointer)self)) {
+                    stream_id, self->priority, SCREAM_MIN_BITRATE, SCREAM_MAX_BITRATE,
+                    (GstScreamQueueBitrateRequestedCb)on_bitrate_change,
+                    (GstScreamQueueNextPacketSizeCb)get_next_packet_rtp_payload_size,
+                    (GstScreamQueueApproveTransmitCb)approve_transmit_cb,
+                    (GstScreamQueueClearQueueCb)clear_queue,
+                    (gpointer)self)) {
 
                 stream = g_new0(GstScreamStream, 1);
                 stream->ssrc = ssrc;

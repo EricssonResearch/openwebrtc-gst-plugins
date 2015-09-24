@@ -209,34 +209,11 @@ static void gst_scream_queue_class_init(GstScreamQueueClass *klass)
         "Daniel Lindström <daniel.lindstrom@ericsson.com>");
 }
 
-static gboolean data_queue_check_full_cb(GstDataQueue *queue, guint visible, guint bytes,
+static gboolean fake_queue_check_full_cb(GstDataQueue *queue, guint visible, guint bytes,
     guint64 time, gpointer user_data)
 {
     return FALSE;
 }
-
-static void data_queue_empty_cb(GstDataQueue *queue, gpointer user_data)
-{
-}
-
-static void data_queue_full_cb(GstDataQueue *queue, gpointer user_data)
-{
-}
-
-static gboolean packet_queue_check_full_cb(GstDataQueue *queue, guint visible, guint bytes,
-    guint64 time, GstScreamStream *stream)
-{
-    return FALSE;
-}
-
-static void packet_queue_empty_cb(GstDataQueue *queue, GstScreamStream *stream)
-{
-}
-
-static void packet_queue_full_cb(GstDataQueue *queue, GstScreamStream *stream)
-{
-}
-
 
 static void gst_scream_data_queue_rtp_item_free(GstScreamDataQueueRtpItem *item)
 {
@@ -283,9 +260,8 @@ static void gst_scream_queue_init(GstScreamQueue *self)
     self->scream_controller_id = DEFAULT_GST_SCREAM_CONTROLLER_ID;
     self->scream_controller = NULL;
     self->approved_packets = gst_data_queue_new(
-        (GstDataQueueCheckFullFunction)data_queue_check_full_cb,
-        (GstDataQueueFullCallback)data_queue_full_cb,
-        (GstDataQueueEmptyCallback)data_queue_empty_cb, self);
+        (GstDataQueueCheckFullFunction)fake_queue_check_full_cb,
+        NULL, NULL, self);
 
     self->incoming_packets = g_async_queue_new();
 
@@ -591,9 +567,8 @@ static GstScreamStream * get_stream(GstScreamQueue *self, guint ssrc, guint pt)
                 stream->ssrc = ssrc;
                 stream->pt = pt;
                 stream->packet_queue = gst_data_queue_new(
-                (GstDataQueueCheckFullFunction)packet_queue_check_full_cb,
-                (GstDataQueueFullCallback)packet_queue_full_cb,
-                (GstDataQueueEmptyCallback)packet_queue_empty_cb, self);
+                    (GstDataQueueCheckFullFunction)fake_queue_check_full_cb,
+                    NULL, NULL, self);
                 stream->enqueued_payload_size = 0;
                 stream->enqueued_packets = 0;
                 g_rw_lock_writer_lock(&self->lock);

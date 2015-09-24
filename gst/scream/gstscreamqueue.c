@@ -407,11 +407,15 @@ static GstFlowReturn gst_scream_queue_sink_chain(GstPad *pad, GstObject *parent,
     GstFlowReturn flow_ret = GST_FLOW_OK;
     GstScreamDataQueueRtpItem *rtp_item;
 
-    if (GST_PAD_IS_FLUSHING(pad))
+    if (GST_PAD_IS_FLUSHING(pad)) {
+        flow_ret = GST_FLOW_FLUSHING;
         goto end;
+    }
 
-    if (!gst_rtp_buffer_map(buffer, GST_MAP_READ, &rtp_buffer))
+    if (!gst_rtp_buffer_map(buffer, GST_MAP_READ, &rtp_buffer)) {
+        flow_ret = GST_FLOW_ERROR;
         goto end;
+    }
 
     rtp_item = g_slice_new(GstScreamDataQueueRtpItem);
     ((GstDataQueueItem *)rtp_item)->object = GST_MINI_OBJECT(buffer);
@@ -441,7 +445,6 @@ static GstFlowReturn gst_scream_queue_sink_chain(GstPad *pad, GstObject *parent,
     g_async_queue_push(self->incoming_packets, (gpointer)rtp_item);
 
 end:
-    flow_ret = GST_PAD_IS_FLUSHING(pad) ? GST_FLOW_FLUSHING : flow_ret;
     return flow_ret;
 }
 

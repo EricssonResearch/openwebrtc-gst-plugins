@@ -179,8 +179,6 @@ typedef struct {
     gboolean q_bit;               /* Quench bit */
 } ScreamFeedback;
 
-static GParamSpec *properties[NUM_PROPERTIES];
-
 static GHashTable *controllers = NULL;
 G_LOCK_DEFINE_STATIC(controllers_lock);
 
@@ -226,8 +224,6 @@ static void gst_scream_controller_class_init (GstScreamControllerClass *klass)
     gobject_class->finalize = gst_scream_controller_finalize;
     gobject_class->set_property = gst_scream_controller_set_property;
     gobject_class->get_property = gst_scream_controller_get_property;
-
-    g_object_class_install_properties(gobject_class, NUM_PROPERTIES, properties);
 }
 
 static void gst_scream_controller_init (GstScreamController *self)

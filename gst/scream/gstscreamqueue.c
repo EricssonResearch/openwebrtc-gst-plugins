@@ -286,7 +286,6 @@ static void gst_scream_queue_init(GstScreamQueue *self)
         (GstDataQueueCheckFullFunction)data_queue_check_full_cb,
         (GstDataQueueFullCallback)data_queue_full_cb,
         (GstDataQueueEmptyCallback)data_queue_empty_cb, self);
-    self->number_of_approved_packets = 0;
 
     self->incoming_packets = g_async_queue_new();
 
@@ -437,7 +436,6 @@ static GstFlowReturn gst_scream_queue_sink_chain(GstPad *pad, GstObject *parent,
 
     if (self->pass_through) {
         rtp_item->adapted = FALSE;
-        self->number_of_approved_packets++;
         gst_data_queue_push(self->approved_packets, (GstDataQueueItem *)rtp_item);
         goto end;
     }
@@ -511,7 +509,6 @@ static void gst_scream_queue_srcpad_loop(GstScreamQueue *self)
 
         buffer = GST_BUFFER(((GstDataQueueItem *)rtp_item)->object);
         gst_pad_push(self->src_pad, buffer);
-        self->number_of_approved_packets--;
 
         if (rtp_item->adapted) {
             guint tmp_time;
@@ -534,7 +531,6 @@ static void gst_scream_queue_srcpad_loop(GstScreamQueue *self)
         GstScreamDataQueueRtpItem *rtp_item = (GstScreamDataQueueRtpItem *)item;
         stream = get_stream(self, item->rtp_ssrc, rtp_item->rtp_pt);
         if (!stream) {
-            self->number_of_approved_packets++;
             rtp_item->adapted = FALSE;
             gst_data_queue_push(self->approved_packets, (GstDataQueueItem *)item);
         } else {
@@ -693,7 +689,6 @@ static void approve_transmit_cb(guint stream_id, GstScreamQueue *self) {
         stream->enqueued_payload_size -= item->rtp_payload_size;
         stream->enqueued_packets--;
         gst_data_queue_push(self->approved_packets, (GstDataQueueItem *)item);
-        self->number_of_approved_packets++;
     }
 }
 

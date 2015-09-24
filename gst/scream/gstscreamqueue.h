@@ -61,7 +61,6 @@ struct _GstScreamQueue {
     /*GstDataQueue *incoming_packets;*/
     GAsyncQueue *incoming_packets;
     GstDataQueue *approved_packets;
-    guint number_of_approved_packets;
     guint64 next_approve_time;
 };
 

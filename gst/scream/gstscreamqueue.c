@@ -637,6 +637,8 @@ static void on_bitrate_change(guint bitrate, guint stream_id, GstScreamQueue *se
     BitrateChangeStruct *bitrate_struct;
     GstScreamStream *stream;
 
+    GST_DEBUG_OBJECT(self, "Updating bitrate of stream %u to %u bps", stream_id, bitrate);
+
     g_rw_lock_reader_lock(&self->lock);
     stream = g_hash_table_lookup(self->streams, GUINT_TO_POINTER(stream_id));
     g_rw_lock_reader_unlock(&self->lock);

@@ -670,13 +670,15 @@ static void approve_transmit_cb(guint stream_id, GstScreamQueue *self) {
     stream = g_hash_table_lookup(self->streams, GUINT_TO_POINTER(stream_id));
     g_rw_lock_reader_unlock(&self->lock);
 
-    if (gst_data_queue_pop(stream->packet_queue, (GstDataQueueItem **)&item)) {
+    if (!gst_data_queue_is_empty(stream->packet_queue) &&
+            gst_data_queue_pop(stream->packet_queue, (GstDataQueueItem **)&item)) {
         stream->enqueued_payload_size -= item->rtp_payload_size;
         stream->enqueued_packets--;
         GST_LOG_OBJECT(self, "approving: pt = %u, seq: %u, pass: %u",
                 item->rtp_pt, item->rtp_seq, self->pass_through);
         gst_data_queue_push(self->approved_packets, (GstDataQueueItem *)item);
-    }
+    } else
+        GST_LOG_OBJECT(self, "Got approve callback on an empty queue, or flushing");
 }
 
 static void clear_queue(guint stream_id, GstScreamQueue *self)

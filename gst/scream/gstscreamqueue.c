@@ -412,10 +412,12 @@ static GstFlowReturn gst_scream_queue_sink_chain(GstPad *pad, GstObject *parent,
 
     if (self->pass_through) {
         rtp_item->adapted = FALSE;
+        GST_LOG_OBJECT(self, "passing through: pt = %u, seq: %u, pass: %u", rtp_item->rtp_pt, rtp_item->rtp_seq, self->pass_through);
         gst_data_queue_push(self->approved_packets, (GstDataQueueItem *)rtp_item);
         goto end;
     }
 
+    GST_LOG_OBJECT(self, "queuing: pt = %u, seq: %u, pass: %u", rtp_item->rtp_pt, rtp_item->rtp_seq, self->pass_through);
     g_async_queue_push(self->incoming_packets, (gpointer)rtp_item);
 
 end:
@@ -473,7 +475,8 @@ static void gst_scream_queue_srcpad_loop(GstScreamQueue *self)
     if (time_now_us >= self->next_approve_time) {
         time_until_next_approve = gst_scream_controller_approve_transmits(self->scream_controller,
             time_now_us);
-    }
+    } else
+        GST_LOG_OBJECT(self, "Time is %lu, waiting %lu", time_now_us, self->next_approve_time);
 
     /* Send all approved packets */
     while (!gst_data_queue_is_empty(self->approved_packets)) {
@@ -486,6 +489,8 @@ static void gst_scream_queue_srcpad_loop(GstScreamQueue *self)
         buffer = GST_BUFFER(((GstDataQueueItem *)rtp_item)->object);
         gst_pad_push(self->src_pad, buffer);
 
+        GST_LOG_OBJECT(self, "pushing: pt = %u, seq: %u, pass: %u", rtp_item->rtp_pt, rtp_item->rtp_seq, self->pass_through);
+
         if (rtp_item->adapted) {
             guint tmp_time;
             stream_id = ((GstScreamDataQueueItem *)rtp_item)->rtp_ssrc;
@@ -497,6 +502,7 @@ static void gst_scream_queue_srcpad_loop(GstScreamQueue *self)
     }
     self->next_approve_time = time_now_us + time_until_next_approve;
 
+    GST_LOG_OBJECT(self, "Popping or waiting %lu", time_until_next_approve);
     item = (GstScreamDataQueueItem *)g_async_queue_timeout_pop(self->incoming_packets, time_until_next_approve);
     if (!item) {
         goto end;
@@ -508,6 +514,8 @@ static void gst_scream_queue_srcpad_loop(GstScreamQueue *self)
         stream = get_stream(self, item->rtp_ssrc, rtp_item->rtp_pt);
         if (!stream) {
             rtp_item->adapted = FALSE;
+            GST_LOG_OBJECT(self, "!adapted, approving: pt = %u, seq: %u, pass: %u",
+                    rtp_item->rtp_pt, rtp_item->rtp_seq, self->pass_through);
             gst_data_queue_push(self->approved_packets, (GstDataQueueItem *)item);
         } else {
             if (G_LIKELY(gst_data_queue_push(stream->packet_queue, (GstDataQueueItem *)rtp_item))) {
@@ -665,6 +673,8 @@ static void approve_transmit_cb(guint stream_id, GstScreamQueue *self) {
     if (gst_data_queue_pop(stream->packet_queue, (GstDataQueueItem **)&item)) {
         stream->enqueued_payload_size -= item->rtp_payload_size;
         stream->enqueued_packets--;
+        GST_LOG_OBJECT(self, "approving: pt = %u, seq: %u, pass: %u",
+                item->rtp_pt, item->rtp_seq, self->pass_through);
         gst_data_queue_push(self->approved_packets, (GstDataQueueItem *)item);
     }
 }

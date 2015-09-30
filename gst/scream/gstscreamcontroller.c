@@ -101,10 +101,6 @@
  * "catching up" when the throughput drops from a very high to a very low value */
 #define MAX_RTP_QUEUE_TIME 2.0f
 
-/*
-GST_DEBUG_CATEGORY_STATIC(gst_scream_controller_debug_category);
-#define GST_CAT_DEFAULT gst_scream_controller_debug_category
-*/
 GST_DEBUG_CATEGORY_EXTERN(gst_scream_queue_debug_category);
 #define GST_CAT_DEFAULT gst_scream_queue_debug_category
 
@@ -377,7 +373,7 @@ gboolean gst_scream_controller_register_new_stream(GstScreamController *controll
 
     g_mutex_lock(&controller->lock);
     if (g_hash_table_contains(controller->streams, GUINT_TO_POINTER(stream_id))) {
-        g_warning("Failed to register new scream stream. The session id needs to be unique.");
+        GST_WARNING("Failed to register new scream stream. The session id needs to be unique.");
         goto end;
     }
 
@@ -449,7 +445,7 @@ guint64 gst_scream_controller_packet_transmitted(GstScreamController *self, guin
         * Pick any used entry
         */
         ix = 0;
-        g_warning("Max number of transmitted_packets allocated, consider increasing MAX_TX_PACKETS %u\n", MAX_TX_PACKETS);
+        GST_WARNING("Max number of transmitted_packets allocated, consider increasing MAX_TX_PACKETS %u\n", MAX_TX_PACKETS);
     }
 
     packet = &self->transmitted_packets[ix];
@@ -551,12 +547,14 @@ guint64 gst_scream_controller_approve_transmits(GstScreamController *self, guint
     stream = get_prioritized_stream(self);
     if (!stream) {
         goto end;
-    }
+    } else
+        GST_DEBUG("Current prioritized stream is %u", stream->id);
 
     /*
     * Enforce packet pacing
     */
     if (self->next_transmit_t_us - time_us > 1000 && self->next_transmit_t_us > time_us) {
+        GST_DEBUG("Enforcing packet pacing: time: %lu, next_transmit_t: %lu", time_us, self->next_transmit_t_us);
         next_approve_time = self->next_transmit_t_us - time_us;
         goto end;
     }
@@ -567,6 +565,7 @@ guint64 gst_scream_controller_approve_transmits(GstScreamController *self, guint
     update_bytes_in_flight_history(self, time_us);
     size_of_next_rtp = get_next_packet_size(stream);
     if (!size_of_next_rtp) {
+        GST_DEBUG("Too many bytes in flight (avail: %u)", size_of_next_rtp);
         goto end;
     }
 
@@ -577,12 +576,16 @@ guint64 gst_scream_controller_approve_transmits(GstScreamController *self, guint
     */
     if (self->owd > self->owd_target) {
         exit = (bytes_in_flight(self) + size_of_next_rtp) > self->cwnd;
+        GST_DEBUG("Current OWD > target, exit = %u + %u > %u = %u",
+            bytes_in_flight(self), size_of_next_rtp, self->cwnd, exit);
     } else {
         float x_cwnd, max_cwnd;
         x_cwnd = 1.0f + BYTES_IN_FLIGHT_SLACK * MAX(0.0f,
         MIN(1.0f, 1.0f - self->owd_trend / 0.5f));
         max_cwnd = MAX(self->cwnd * x_cwnd, (float)self->cwnd + self->mss);
         exit = bytes_in_flight(self) + size_of_next_rtp > max_cwnd;
+        GST_DEBUG("Current OWD <= target, exit = %u + %u > %g = %u",
+            bytes_in_flight(self), size_of_next_rtp, max_cwnd, exit);
     }
 
     /*
@@ -592,6 +595,7 @@ guint64 gst_scream_controller_approve_transmits(GstScreamController *self, guint
     */
     if (time_us - self->last_transmit_t_us > 200000) {
         exit = FALSE;
+        GST_DEBUG("Too long since we transmitted, so overriding");
     }
 
     if (!exit) {
@@ -618,7 +622,7 @@ void gst_scream_controller_new_rtp_packet(GstScreamController *self, guint strea
 
     stream = g_hash_table_lookup(self->streams, GUINT_TO_POINTER(stream_id));
     if (!stream) {
-        g_warning("Scream controller received an RTP packet that did not belong to a registered\n"
+        GST_WARNING("Scream controller received an RTP packet that did not belong to a registered\n"
         "stream. stream_id is  %u\n", stream_id);
         goto end;
     }
@@ -1058,7 +1062,7 @@ void gst_scream_controller_incoming_feedback(GstScreamController *self, guint st
 
     stream = g_hash_table_lookup(self->streams, GUINT_TO_POINTER(stream_id));
     if (!stream) {
-        g_warning("Received feedback for an unknown stream.");
+        GST_WARNING("Received feedback for an unknown stream.");
         goto end;
     }
 

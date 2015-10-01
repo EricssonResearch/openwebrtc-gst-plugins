@@ -623,26 +623,8 @@ static gboolean configure(GstScreamQueue *self) {
     return res;
 }
 
-typedef struct
-{
-    guint bitrate;
-    guint ssrc;
-    guint pt;
-    GstScreamQueue *scream_queue;
-} BitrateChangeStruct;
-
-static gboolean emit_on_bitrate_change(BitrateChangeStruct *bitrate_struct)
-{
-    g_signal_emit_by_name(bitrate_struct->scream_queue, "on-bitrate-change",
-        bitrate_struct->bitrate, bitrate_struct->ssrc, bitrate_struct->pt);
-    gst_object_unref(GST_ELEMENT(bitrate_struct->scream_queue));
-    g_slice_free(BitrateChangeStruct, bitrate_struct);
-    return G_SOURCE_REMOVE;
-}
-
 static void on_bitrate_change(guint bitrate, guint stream_id, GstScreamQueue *self)
 {
-    BitrateChangeStruct *bitrate_struct;
     GstScreamStream *stream;
 
     GST_DEBUG_OBJECT(self, "Updating bitrate of stream %u to %u bps", stream_id, bitrate);
@@ -650,15 +632,8 @@ static void on_bitrate_change(guint bitrate, guint stream_id, GstScreamQueue *se
     g_rw_lock_reader_lock(&self->lock);
     stream = g_hash_table_lookup(self->streams, GUINT_TO_POINTER(stream_id));
     g_rw_lock_reader_unlock(&self->lock);
-    g_return_if_fail(stream);
 
-    bitrate_struct = g_slice_new(BitrateChangeStruct);
-    bitrate_struct->bitrate = bitrate;
-    bitrate_struct->ssrc = stream->ssrc;
-    bitrate_struct->pt = stream->pt;
-    bitrate_struct->scream_queue = self;
-    gst_object_ref(GST_ELEMENT(self));
-    g_timeout_add(0, (GSourceFunc)emit_on_bitrate_change, bitrate_struct);
+    g_signal_emit_by_name(self, "on-bitrate-change", bitrate, stream->ssrc, stream->pt);
 }
 
 

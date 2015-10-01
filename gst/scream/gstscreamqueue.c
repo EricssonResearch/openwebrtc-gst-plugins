@@ -84,7 +84,7 @@ typedef struct {
 
 typedef struct {
     guint ssrc, pt;
-    GstDataQueue *packet_queue;
+    GstAtomicQueue *packet_queue;
     guint enqueued_payload_size;
     guint enqueued_packets;
 } GstScreamStream;
@@ -228,16 +228,22 @@ static void gst_scream_data_queue_rtcp_item_free(GstScreamDataQueueRtcpItem *ite
     g_slice_free(GstScreamDataQueueRtcpItem, item);
 }
 
-static void destroy_stream(GstScreamStream *stream) {
+static void clear_packet_queue(GstAtomicQueue *queue)
+{
     GstDataQueueItem *item;
-    while (!gst_data_queue_is_empty(stream->packet_queue)) {
-        gst_data_queue_pop(stream->packet_queue, &item);
+
+    while ((item = gst_atomic_queue_pop(queue))) {
         item->destroy(item);
     }
-    gst_object_unref(stream->packet_queue);
-    g_free(stream);
 }
 
+static void destroy_stream(GstScreamStream *stream)
+{
+    clear_packet_queue(stream->packet_queue);
+    gst_atomic_queue_unref(stream->packet_queue);
+
+    g_free(stream);
+}
 
 static void gst_scream_queue_init(GstScreamQueue *self)
 {
@@ -253,7 +259,7 @@ static void gst_scream_queue_init(GstScreamQueue *self)
     gst_element_add_pad(GST_ELEMENT(self), self->src_pad);
 
     g_rw_lock_init(&self->lock);
-    self->streams = g_hash_table_new_full(NULL, NULL, NULL, (GDestroyNotify)destroy_stream);
+    self->streams = g_hash_table_new_full(NULL, NULL, NULL, (GDestroyNotify) destroy_stream);
     self->adapted_stream_ids = g_hash_table_new(NULL, NULL);
     self->ignored_stream_ids = g_hash_table_new(NULL, NULL);
 
@@ -518,17 +524,13 @@ static void gst_scream_queue_srcpad_loop(GstScreamQueue *self)
                     rtp_item->rtp_pt, rtp_item->rtp_seq, self->pass_through);
             gst_data_queue_push(self->approved_packets, (GstDataQueueItem *)item);
         } else {
-            if (G_LIKELY(gst_data_queue_push(stream->packet_queue, (GstDataQueueItem *)rtp_item))) {
-                stream->enqueued_payload_size += rtp_item->rtp_payload_size;
-                stream->enqueued_packets++;
-                rtp_item->adapted = TRUE;
-                self->next_approve_time = 0;
-                gst_scream_controller_new_rtp_packet(self->scream_controller, stream_id, rtp_item->rtp_ts,
-                    rtp_item->enqueued_time, stream->enqueued_payload_size, rtp_item->rtp_payload_size);
-            } else {
-                GST_DEBUG_OBJECT(self, "Failed pushing RTP packet to the stream packet queue. flushing?");
-                ((GstDataQueueItem *)rtp_item)->destroy(rtp_item);
-            }
+            gst_atomic_queue_push(stream->packet_queue, rtp_item);
+            stream->enqueued_payload_size += rtp_item->rtp_payload_size;
+            stream->enqueued_packets++;
+            rtp_item->adapted = TRUE;
+            self->next_approve_time = 0;
+            gst_scream_controller_new_rtp_packet(self->scream_controller, stream_id, rtp_item->rtp_ts,
+                rtp_item->enqueued_time, stream->enqueued_payload_size, rtp_item->rtp_payload_size);
         }
     } else { /* item->type == GST_SCREAM_DATA_QUEUE_ITEM_TYPE_RTCP */
         GstScreamDataQueueRtcpItem *rtcp_item = (GstScreamDataQueueRtcpItem *)item;
@@ -574,9 +576,7 @@ static GstScreamStream * get_stream(GstScreamQueue *self, guint ssrc, guint pt)
                 stream = g_new0(GstScreamStream, 1);
                 stream->ssrc = ssrc;
                 stream->pt = pt;
-                stream->packet_queue = gst_data_queue_new(
-                    (GstDataQueueCheckFullFunction)fake_queue_check_full_cb,
-                    NULL, NULL, self);
+                stream->packet_queue = gst_atomic_queue_new(0);
                 stream->enqueued_payload_size = 0;
                 stream->enqueued_packets = 0;
                 g_rw_lock_writer_lock(&self->lock);
@@ -602,7 +602,7 @@ static guint get_next_packet_rtp_payload_size(guint stream_id, GstScreamQueue *s
     g_rw_lock_reader_lock(&self->lock);
     stream = g_hash_table_lookup(self->streams, GUINT_TO_POINTER(stream_id));
     g_rw_lock_reader_unlock(&self->lock);
-    if (!gst_data_queue_is_empty(stream->packet_queue) && gst_data_queue_peek(stream->packet_queue, (GstDataQueueItem **)&item)) {
+    if ((item = gst_atomic_queue_peek(stream->packet_queue))) {
         size = item->rtp_payload_size;
     }
     return size;
@@ -670,8 +670,7 @@ static void approve_transmit_cb(guint stream_id, GstScreamQueue *self) {
     stream = g_hash_table_lookup(self->streams, GUINT_TO_POINTER(stream_id));
     g_rw_lock_reader_unlock(&self->lock);
 
-    if (!gst_data_queue_is_empty(stream->packet_queue) &&
-            gst_data_queue_pop(stream->packet_queue, (GstDataQueueItem **)&item)) {
+    if ((item = gst_atomic_queue_pop(stream->packet_queue))) {
         stream->enqueued_payload_size -= item->rtp_payload_size;
         stream->enqueued_packets--;
         GST_LOG_OBJECT(self, "approving: pt = %u, seq: %u, pass: %u",
@@ -687,7 +686,7 @@ static void clear_queue(guint stream_id, GstScreamQueue *self)
     g_rw_lock_reader_lock(&self->lock);
     stream = g_hash_table_lookup(self->streams, GUINT_TO_POINTER(stream_id));
     g_rw_lock_reader_unlock(&self->lock);
-    gst_data_queue_flush(stream->packet_queue);
+    clear_packet_queue(stream->packet_queue);
     stream->enqueued_payload_size = 0;
     stream->enqueued_packets = 0;
     gst_pad_push_event(self->sink_pad,
@@ -704,7 +703,7 @@ static void gst_scream_queue_incoming_feedback(GstScreamQueue *self, guint ssrc,
     ((GstDataQueueItem *)rtcp_item)->size = 0;
     ((GstDataQueueItem *)rtcp_item)->visible = TRUE;
     ((GstDataQueueItem *)rtcp_item)->duration = 0;
-    ((GstDataQueueItem *)rtcp_item)->destroy = (GDestroyNotify) gst_scream_data_queue_rtcp_item_free;
+    ((GstDataQueueItem *)rtcp_item)->destroy = (GDestroyNotify)gst_scream_data_queue_rtcp_item_free;
     ((GstScreamDataQueueItem *)rtcp_item)->type = GST_SCREAM_DATA_QUEUE_ITEM_TYPE_RTCP;
     ((GstScreamDataQueueItem *)rtcp_item)->rtp_ssrc = ssrc;
     rtcp_item->highest_seq = highest_seq;

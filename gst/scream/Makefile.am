@@ -6,6 +6,7 @@ libgstscream_la_SOURCES = \
     gstscreamqueue.c
 
 libgstscream_la_CFLAGS = \
+    -g -O0 \
     $(GST_PLUGINS_BASE_CFLAGS) \
     $(GST_BASE_CFLAGS) \
     $(GST_CFLAGS)

@@ -74,7 +74,7 @@
  * however with a higher risk of unstable behavior in
  * sudden congestion situations */
 #define BYTES_IN_FLIGHT_SLACK 0.0f
-/* Rate update interval */
+/* Rate adjust interval */
 #define RATE_ADJUST_INTERVAL 200000 /* us */
 
 /* ==== Less important tuning parameters ==== */

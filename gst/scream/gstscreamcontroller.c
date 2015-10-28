@@ -574,18 +574,26 @@ guint64 gst_scream_controller_approve_transmits(GstScreamController *self, guint
     * Determine if window is large enough to transmit
     * an RTP packet
     */
-    if (self->owd > self->owd_target) {
-        exit = (bytes_in_flight(self) + size_of_next_rtp) > self->cwnd;
-        GST_DEBUG("Current OWD > target, exit = %u + %u > %u = %u",
-            bytes_in_flight(self), size_of_next_rtp, self->cwnd, exit);
-    } else {
-        float x_cwnd, max_cwnd;
-        x_cwnd = 1.0f + BYTES_IN_FLIGHT_SLACK * MAX(0.0f,
-        MIN(1.0f, 1.0f - self->owd_trend / 0.5f));
-        max_cwnd = MAX(self->cwnd * x_cwnd, (float)self->cwnd + self->mss);
-        exit = bytes_in_flight(self) + size_of_next_rtp > max_cwnd;
-        GST_DEBUG("Current OWD <= target, exit = %u + %u > %g = %u",
-            bytes_in_flight(self), size_of_next_rtp, max_cwnd, exit);
+    if (self->owd_fraction_avg > 0.2) {
+        /*
+        * Disable limitation to send window if very
+        * little congestion detected, this reduces
+        * sensitivity to reverse path congestion in cases
+        * where the forward path is more or less non-congested
+        */
+        if (self->owd > self->owd_target) {
+            exit = (bytes_in_flight(self) + size_of_next_rtp) > self->cwnd;
+            GST_DEBUG("Current OWD > target, exit = %u + %u > %u = %u",
+                bytes_in_flight(self), size_of_next_rtp, self->cwnd, exit);
+        } else {
+            float x_cwnd, max_cwnd;
+            x_cwnd = 1.0f + BYTES_IN_FLIGHT_SLACK * MAX(0.0f,
+                MIN(1.0f, 1.0f - self->owd_trend / 0.5f));
+            max_cwnd = MAX(self->cwnd * x_cwnd, (float)self->cwnd + self->mss);
+            exit = bytes_in_flight(self) + size_of_next_rtp > max_cwnd;
+            GST_DEBUG("Current OWD <= target, exit = %u + %u > %g = %u",
+                bytes_in_flight(self), size_of_next_rtp, max_cwnd, exit);
+        }
     }
 
     /*

@@ -950,7 +950,6 @@ static void update_target_stream_bitrate(GstScreamController *self, ScreamStream
             time_us - stream->t_last_rtp_q_clear_us > 5 * MAX_RTP_QUEUE_TIME * 1000000) {
             GST_DEBUG("Target bitrate :  RTP queue delay ~ %f. Clear RTP queue \n",
                     stream->tx_size_bits_avg / MAX(br,stream->target_bitrate));
-            stream->target_bitrate = stream->min_bitrate;
             stream->next_packet_size = 0;
             stream->bytes_in_queue = 0;
             stream->tx_size_bits_avg = 0;

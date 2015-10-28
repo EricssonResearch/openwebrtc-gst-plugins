@@ -992,13 +992,22 @@ static void update_target_stream_bitrate(GstScreamController *self, ScreamStream
             /*
             * Update target rate
             */
+
             increment = br*(1.0f - OWD_GUARD * scl * priority_scale * tmp)-
-                TX_QUEUE_SIZE_FACTOR * stream->tx_size_bits_avg * priority_scale * tmp - stream->target_bitrate;
+                TX_QUEUE_SIZE_FACTOR * stream->tx_size_bits_avg * priority_scale * tmp -
+                stream->target_bitrate;
+
+
             if (increment < 0) {
                 if (stream->was_fast_start) {
                     stream->was_fast_start = FALSE;
                     stream->target_bitrate_i = stream->target_bitrate;
                 }
+                /*
+                * Minimize the risk that reverse path congestion
+                * reduces target bit rate
+                */
+                increment *= MIN(1.0f,self->owd_fraction_avg);
             } else {
                 stream->was_fast_start = TRUE;
                 if (!is_competing_flows(self)) {

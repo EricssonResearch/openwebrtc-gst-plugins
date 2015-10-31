@@ -55,7 +55,7 @@
 /* Typical frame period */
 #define FRAME_PERIOD 0.040f
 /* Max video rampup speed in bps/s (bits per second increase per second) */
-#define RAMP_UP_SPEED 200000.0f // bps/s
+#define RAMP_UP_SPEED 100000.0f // bps/s
 /* CWND scale factor upon loss event */
 #define LOSS_BETA 0.6f
 /* Compensation factor for RTP queue size
@@ -95,7 +95,7 @@
 /* OWD trend and shared bottleneck detection */
 #define OWD_FRACTION_HIST_INTERVAL 50000 /* us */
 /* Max video rate estimation update period */
-#define RATE_UPDATE_INTERVAL 200000  /* us */
+#define RATE_UPDATE_INTERVAL 50000  /* us */
 
 /* When the queued time is > than MAX_RTP_QUEUE_TIME the queue time is emptied. This allow for faster
  * "catching up" when the throughput drops from a very high to a very low value */
@@ -125,6 +125,8 @@ enum {
 };
 
 #define RATE_RTP_HIST_SIZE 21
+#define RATE_UPDATE_SIZE 4
+
 typedef struct {
     guint id;
 
@@ -163,6 +165,10 @@ typedef struct {
     gfloat rate_rtp_hist[RATE_RTP_HIST_SIZE];
     gint rate_rtp_hist_ptr;
     gfloat rate_rtp_median;
+    gfloat rate_acked_hist[RATE_UPDATE_SIZE];
+    gfloat rate_transmitted_hist[RATE_UPDATE_SIZE];
+    gfloat rate_rtp_hist_sh[RATE_UPDATE_SIZE];
+    gint rate_update_hist_ptr;
 
 
     guint64 t_start_us;
@@ -412,6 +418,12 @@ gboolean gst_scream_controller_register_new_stream(GstScreamController *controll
         stream->rate_rtp_hist[n] = 0;
     stream->rate_rtp_hist_ptr = 0;
     stream->rate_rtp_median = 0.0f;
+    for (n=0; n < RATE_UPDATE_SIZE; n++) {
+        stream->rate_transmitted_hist[n] = 0;
+        stream->rate_acked_hist[n] = 0;
+        stream->rate_rtp_hist_sh[n] = 0;
+    }
+    stream->rate_update_hist_ptr = 0;
 
 
     g_hash_table_insert(controller->streams, GUINT_TO_POINTER(stream_id), stream);
@@ -805,10 +817,28 @@ static void update_bytes_in_flight_history(GstScreamController *self, guint64 ti
 
 void update_rate(GstScreamController *self, ScreamStream *stream, float t_delta)
 {
-    stream->rate_transmitted = 0.5f * (stream->rate_transmitted +
-        stream->bytes_transmitted * 8.0f / t_delta);
-    stream->rate_acked = 0.5f * (stream->rate_acked + stream->bytes_acked * 8.0f / t_delta);
-    stream->rate_rtp = stream->bytes_rtp * 8.0f / t_delta;
+    gint n;
+
+    /*
+    * Compute transmitted, acked and video (RTP) rate over a 200ms(4*50ms) sliding window
+    */
+    stream->rate_transmitted_hist[stream->rate_update_hist_ptr] = stream->bytes_transmitted * 8.0f / t_delta;
+    stream->rate_acked_hist[stream->rate_update_hist_ptr] = stream->bytes_acked * 8.0f / t_delta;
+    stream->rate_rtp_hist_sh[stream->rate_update_hist_ptr] = stream->bytes_rtp * 8.0f / t_delta;
+
+    stream->rate_update_hist_ptr = (stream->rate_update_hist_ptr+1) % RATE_UPDATE_SIZE;
+
+    stream->rate_transmitted = 0.0f;
+    stream->rate_acked = 0.0f;
+    stream->rate_rtp = 0.0f;
+    for (n = 0; n < RATE_UPDATE_SIZE; n++) {
+        stream->rate_transmitted += stream->rate_transmitted_hist[n];
+        stream->rate_acked += stream->rate_acked_hist[n];
+        stream->rate_rtp += stream->rate_rtp_hist_sh[n];
+    }
+    stream->rate_transmitted /= RATE_UPDATE_SIZE;
+    stream->rate_acked /= RATE_UPDATE_SIZE;
+    stream->rate_rtp /= RATE_UPDATE_SIZE;
 
     /*
     * Generate a media RTP bitrate value, this serves to set a reasonably safe
@@ -817,7 +847,7 @@ void update_rate(GstScreamController *self, ScreamStream *stream, float t_delta)
     */
     stream->rate_rtp_sum += stream->rate_rtp;
     stream->rate_rtp_sum_n++;
-    if (stream->rate_rtp_sum_n==5) {
+    if (stream->rate_rtp_sum_n==10000000/RATE_UPDATE_INTERVAL) {
         /*
         * An average video bitrate is stored every ~1.0s
         */

@@ -390,41 +390,14 @@ gboolean gst_scream_controller_register_new_stream(GstScreamController *controll
     stream->clear_queue = clear_queue;
     stream->user_data = user_data;
 
-    stream->bytes_in_queue = 0;
     stream->id = stream_id;
-    stream->last_rtp_timestamp = 0;
     stream->priority = priority; /* TODO: Handle priority = 0. */
     stream->min_bitrate = (gfloat)min_bitrate;
     stream->max_bitrate = (gfloat)max_bitrate;
     stream->target_bitrate = stream->min_bitrate;
     stream->target_bitrate_i = 1.0f;
-    stream->credit = 0.0f;
-    stream->bytes_transmitted = 0;
-    stream->bytes_acked = 0;
-    stream->rate_transmitted = 0.0f;
-    stream->rate_acked = 0.0f;
-    stream->last_bitrate_adjust_t_us = 0;
     stream->loss_event_flag = FALSE;
-    stream->n_loss = 0;
-    stream->t_start_us = 0;
-    stream->t_last_rtp_q_clear_us = 0;
-
-    stream->next_packet_size = 0;
-    stream->bytes_rtp = 0;
-    stream->rate_rtp = 0.0f;
-    stream->rate_rtp_sum = 0.0f;
-    stream->rate_rtp_sum_n = 0;
-    for (n=0; n < RATE_RTP_HIST_SIZE; n++)
-        stream->rate_rtp_hist[n] = 0;
-    stream->rate_rtp_hist_ptr = 0;
-    stream->rate_rtp_median = 0.0f;
-    for (n=0; n < RATE_UPDATE_SIZE; n++) {
-        stream->rate_transmitted_hist[n] = 0;
-        stream->rate_acked_hist[n] = 0;
-        stream->rate_rtp_hist_sh[n] = 0;
-    }
-    stream->rate_update_hist_ptr = 0;
-
+    /* Everything else is already zero-initialised */
 
     g_hash_table_insert(controller->streams, GUINT_TO_POINTER(stream_id), stream);
     ret = TRUE;

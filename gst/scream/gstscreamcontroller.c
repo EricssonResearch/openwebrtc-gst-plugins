@@ -1053,7 +1053,7 @@ static void update_target_stream_bitrate(GstScreamController *self, ScreamStream
     if (self->n_acc_bytes_in_flight_max > 0) {
         in_fl = self->acc_bytes_in_flight_max/self->n_acc_bytes_in_flight_max;
     }
-    GST_DEBUG("Target br adj : "
+    GST_INFO("Target br adj : "
             "target(actual)=%4.0f(%4.0f,%4.0f,%4.0f)k rtpQ=%4.0fms cwnd=%5u(%5u) srtt=%3.0fms "
             "owd(T)=%3.0f(%3.0f)ms fs=%u dt=%3.0f\n",
             stream->target_bitrate/1000.0f,

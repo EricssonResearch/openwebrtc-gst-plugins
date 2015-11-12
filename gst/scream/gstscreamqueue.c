@@ -487,8 +487,10 @@ static void gst_scream_queue_srcpad_loop(GstScreamQueue *self)
     if (time_now_us >= self->next_approve_time) {
         time_until_next_approve = gst_scream_controller_approve_transmits(self->scream_controller,
             time_now_us);
-    } else
-        GST_LOG_OBJECT(self, "Time is %lu, waiting %lu", time_now_us, self->next_approve_time);
+    } else {
+        GST_LOG_OBJECT(self, "Time is %" G_GUINT64_FORMAT ", waiting %" G_GUINT64_FORMAT,
+            time_now_us, self->next_approve_time);
+    }
 
     /* Send all approved packets */
     while (!gst_data_queue_is_empty(self->approved_packets)) {
@@ -514,7 +516,7 @@ static void gst_scream_queue_srcpad_loop(GstScreamQueue *self)
     }
     self->next_approve_time = time_now_us + time_until_next_approve;
 
-    GST_LOG_OBJECT(self, "Popping or waiting %lu", time_until_next_approve);
+    GST_LOG_OBJECT(self, "Popping or waiting %" G_GUINT64_FORMAT, time_until_next_approve);
     item = (GstScreamDataQueueItem *)g_async_queue_timeout_pop(self->incoming_packets, time_until_next_approve);
     if (!item) {
         goto end;

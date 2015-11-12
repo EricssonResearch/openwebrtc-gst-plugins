@@ -541,7 +541,8 @@ guint64 gst_scream_controller_approve_transmits(GstScreamController *self, guint
     * Enforce packet pacing
     */
     if (self->next_transmit_t_us - time_us > 1000 && self->next_transmit_t_us > time_us) {
-        GST_DEBUG("Enforcing packet pacing: time: %lu, next_transmit_t: %lu", time_us, self->next_transmit_t_us);
+        GST_DEBUG("Enforcing packet pacing: time: %" G_GUINT64_FORMAT
+            ", next_transmit_t: %" G_GUINT64_FORMAT, time_us, self->next_transmit_t_us);
         next_approve_time = self->next_transmit_t_us - time_us;
         goto end;
     }

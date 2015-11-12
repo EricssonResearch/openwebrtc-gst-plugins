@@ -212,6 +212,12 @@ static void gst_scream_queue_class_init(GstScreamQueueClass *klass)
 static gboolean fake_queue_check_full_cb(GstDataQueue *queue, guint visible, guint bytes,
     guint64 time, gpointer user_data)
 {
+    SCREAM_UNUSED(queue);
+    SCREAM_UNUSED(visible);
+    SCREAM_UNUSED(bytes);
+    SCREAM_UNUSED(time);
+    SCREAM_UNUSED(user_data);
+
     return FALSE;
 }
 

@@ -30,6 +30,10 @@
 #define INET
 #define INET6
 
+
+/* helper macro for unused variables */
+#define SCREAM_UNUSED(x) (void)x
+
 /*
  * Type macros.
  */

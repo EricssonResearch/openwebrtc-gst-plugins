@@ -109,7 +109,6 @@ G_DEFINE_TYPE(GstScreamController, gst_scream_controller, G_TYPE_OBJECT);
 /* Just a high timer.. */
 #define DONT_APPROVE_TRANSMIT_TIME 10000000
 
-
 enum
 {
   LAST_SIGNAL
@@ -195,12 +194,12 @@ static void gst_scream_controller_get_property(GObject *object, guint prop_id, G
 
 static void add_credit(GstScreamController *self, ScreamStream *served_stream,
     int transmitted_bytes);
-static void subtract_credit(GstScreamController *self, ScreamStream *served_stream,
+static void subtract_credit(ScreamStream *served_stream,
     int transmitted_bytes);
 
 static guint bytes_in_flight(GstScreamController *self);
 static void update_bytes_in_flight_history(GstScreamController *self, guint64 time_us);
-static void update_rate(GstScreamController *self, ScreamStream *stream, float t_delta);
+static void update_rate(ScreamStream *stream, float t_delta);
 
 static void update_target_stream_bitrate(GstScreamController *self, ScreamStream *stream,
   guint64 time_us);
@@ -325,6 +324,8 @@ static void gst_scream_controller_set_property(GObject *object, guint prop_id, c
 {
     GstScreamController *self = GST_SCREAM_CONTROLLER(object);
 
+    SCREAM_UNUSED(value);
+
     switch (prop_id) {
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(self, prop_id, pspec);
@@ -336,6 +337,8 @@ static void gst_scream_controller_get_property(GObject *object, guint prop_id, G
     GParamSpec *pspec)
 {
     GstScreamController *self = GST_SCREAM_CONTROLLER(object);
+
+    SCREAM_UNUSED(value);
 
     switch (prop_id) {
     default:
@@ -375,7 +378,6 @@ gboolean gst_scream_controller_register_new_stream(GstScreamController *controll
 {
     ScreamStream *stream;
     gboolean ret = FALSE;
-    gint n;
 
     g_mutex_lock(&controller->lock);
     if (g_hash_table_contains(controller->streams, GUINT_TO_POINTER(stream_id))) {
@@ -466,7 +468,7 @@ guint64 gst_scream_controller_packet_transmitted(GstScreamController *self, guin
     /*
     * Reduce used credit for served streams
     */
-    subtract_credit(self, stream, size);
+    subtract_credit(stream, size);
 
     /*
     * compute paceInterval, we assume a min bw of 50kbps and a min tp of 1ms
@@ -517,7 +519,7 @@ guint64 gst_scream_controller_approve_transmits(GstScreamController *self, guint
         self->rate_transmitted = 0.0f;
         while (it) {
             ScreamStream *stream  = (ScreamStream *)it->data;
-            update_rate(self, stream, t_delta);
+            update_rate(stream, t_delta);
             self->rate_transmitted += stream->rate_transmitted;
             it = g_list_next(it);
 
@@ -732,7 +734,7 @@ static void add_credit(GstScreamController *self, ScreamStream *served_stream,
     g_list_free(list);
 }
 
-static void subtract_credit(GstScreamController *self, ScreamStream *served_stream,
+static void subtract_credit(ScreamStream *served_stream,
     int transmitted_bytes)
 {
     served_stream->credit = MAX(0.0f, served_stream->credit - transmitted_bytes);
@@ -788,7 +790,7 @@ static void update_bytes_in_flight_history(GstScreamController *self, guint64 ti
     }
 }
 
-void update_rate(GstScreamController *self, ScreamStream *stream, float t_delta)
+void update_rate(ScreamStream *stream, float t_delta)
 {
     gint n;
 
@@ -1079,6 +1081,9 @@ void gst_scream_controller_incoming_feedback(GstScreamController *self, guint st
     guint32 highest_seq_ext, seq_ext;
     gint n;
 
+    SCREAM_UNUSED(n_ecn);
+    SCREAM_UNUSED(q_bit);
+
     stream = g_hash_table_lookup(self->streams, GUINT_TO_POINTER(stream_id));
     if (!stream) {
         GST_WARNING("Received feedback for an unknown stream.");
@@ -1242,7 +1247,7 @@ static void update_cwnd(GstScreamController *self, guint64 time_us)
         * loss event detected, decrease congestion window
         */
         self->cwnd_i = self->cwnd;
-        self->cwnd = MAX(self->cwnd_min, (gint) (LOSS_BETA * self->cwnd));
+        self->cwnd = MAX(self->cwnd_min, (guint) (LOSS_BETA * self->cwnd));
         self->loss_event = FALSE;
         self->last_congestion_detected_t_us = time_us;
         self->in_fast_start = FALSE;
@@ -1276,7 +1281,7 @@ static void update_cwnd(GstScreamController *self, guint64 time_us)
                 else if (self->n_fast_start > 1)
                     th = 0.1f;
                 if (self->owd_trend < th) {
-                    self->cwnd += MIN(10 * self->mss, (gint)(self->bytes_newly_acked * scl_i));
+                    self->cwnd += MIN(10 * self->mss, (guint)(self->bytes_newly_acked * scl_i));
                 } else {
                     self->in_fast_start = FALSE;
                     self->last_congestion_detected_t_us = time_us;

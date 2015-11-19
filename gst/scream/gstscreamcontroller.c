@@ -55,7 +55,7 @@
 /* Typical frame period */
 #define FRAME_PERIOD 0.040f
 /* Max video rampup speed in bps/s (bits per second increase per second) */
-#define RAMP_UP_SPEED 100000.0f // bps/s
+#define RAMP_UP_SPEED 200000.0f // bps/s
 /* CWND scale factor upon loss event */
 #define LOSS_BETA 0.6f
 /* Compensation factor for RTP queue size
@@ -65,7 +65,7 @@
 /* Compensation factor for detected congestion in rate computation
  * A higher value such as 0.2 gives less jitter esp. in wireless (LTE)
  * but potentially also lower link utilization */
-#define OWD_GUARD 0.1f
+#define OWD_GUARD 0.2f
 
 /* Video rate scaling due to loss events */
 #define LOSS_EVENT_RATE_SCALE 0.9f
@@ -82,7 +82,9 @@
 #define MIN_PACE_INTERVAL 0.00f    /* s */
 #define MINIMUM_PACE_BANDWIDTH 50000.0f /* bps */
 /* Initial MSS */
-#define INIT_MSS 1000
+#define INIT_MSS 100
+/* Initial CWND */
+#define INIT_CWND 5000
 /* CWND up and down gain factors */
 #define CWND_GAIN_UP 1.0f
 #define CWND_GAIN_DOWN 1.0f
@@ -99,7 +101,7 @@
 
 /* When the queued time is > than MAX_RTP_QUEUE_TIME the queue time is emptied. This allow for faster
  * "catching up" when the throughput drops from a very high to a very low value */
-#define MAX_RTP_QUEUE_TIME 2.0f
+#define MAX_RTP_QUEUE_TIME 0.5f
 
 GST_DEBUG_CATEGORY_EXTERN(gst_scream_queue_debug_category);
 #define GST_CAT_DEFAULT gst_scream_queue_debug_category
@@ -168,7 +170,7 @@ typedef struct {
     gfloat rate_transmitted_hist[RATE_UPDATE_SIZE];
     gfloat rate_rtp_hist_sh[RATE_UPDATE_SIZE];
     gint rate_update_hist_ptr;
-
+    guint64 last_target_bitrate_i_adjust_us;
 
     guint64 t_start_us;
 } ScreamStream;
@@ -272,9 +274,8 @@ static void gst_scream_controller_init (GstScreamController *self)
     self->mss = INIT_MSS;
     self->cwnd_min = INIT_MSS * 3;
     self->cwnd_i = 1;
-    self->cwnd = INIT_MSS * 10;
+    self->cwnd = INIT_CWND;
     self->was_cwnd_increase = FALSE;
-    //self->bytes_in_flight_max = 0;
 
     self->loss_event = FALSE;
 
@@ -655,6 +656,7 @@ static void initialize(GstScreamController *self, guint64 time_us) {
     self->next_transmit_t_us = time_us;
     self->last_rate_update_t_us = time_us;
     self->last_congestion_detected_t_us = time_us;
+    self->lastfb = time_us;
     self->is_initialized = TRUE;
 }
 
@@ -827,7 +829,7 @@ void update_rate(ScreamStream *stream, float t_delta)
         /*
         * An average video bitrate is stored every ~1.0s
         */
-        stream->rate_rtp_hist[stream->rate_rtp_hist_ptr] = stream->rate_rtp_sum/5;
+        stream->rate_rtp_hist[stream->rate_rtp_hist_ptr] = stream->rate_rtp_sum/(10000000/RATE_UPDATE_INTERVAL);
         stream->rate_rtp_hist_ptr = (stream->rate_rtp_hist_ptr + 1) % RATE_RTP_HIST_SIZE;
         stream->rate_rtp_sum = 0;
         stream->rate_rtp_sum_n = 0;
@@ -874,7 +876,7 @@ void update_rate(ScreamStream *stream, float t_delta)
 static void update_target_stream_bitrate(GstScreamController *self, ScreamStream *stream,
     guint64 time_us)
 {
-    gfloat br = 0, scl_i, priority_sum, priority_scale, increment, scl, tmp;
+    gfloat br = 0, scl_i, priority_sum, priority_scale, increment, scl, tmp, ramp_up_speed;
     guint tx_size_bits = 0;
     GList *it, *list;
 
@@ -892,7 +894,14 @@ static void update_target_stream_bitrate(GstScreamController *self, ScreamStream
     */
     if (stream->loss_event_flag) {
         stream->loss_event_flag = FALSE;
-        stream->target_bitrate_i = stream->target_bitrate;
+        if (time_us - stream->last_target_bitrate_i_adjust_us > 5000000) {
+            /*
+            * Avoid that target_bitrate_i is set too low in cases where a
+            * congestion event is prolonged
+            */
+            stream->target_bitrate_i = stream->rate_acked;
+            stream->last_target_bitrate_i_adjust_us = time_us;
+        }
         stream->target_bitrate = MAX(stream->min_bitrate, stream->target_bitrate * LOSS_EVENT_RATE_SCALE);
         stream->last_bitrate_adjust_t_us  = time_us;
     } else {
@@ -929,6 +938,10 @@ static void update_target_stream_bitrate(GstScreamController *self, ScreamStream
         * TODO This needs to be done differently
         *  distribute the total max throughput among the
         *  streams according to their priorities
+        *  The C++ implementation of SCReAM (https://github.com/EricssonResearch/scream)
+        *  has a different implementation that can be transmitted
+        *  out when SCReAM in OWR is used to prioritize between several
+        *  streams
         */
 
         /*
@@ -950,8 +963,11 @@ static void update_target_stream_bitrate(GstScreamController *self, ScreamStream
         if (is_competing_flows(self))
             tmp = 0.5f;
 
-
-        increment = 0.0f;
+        /*
+        * Limit ramp_up_speed when bitrate is low, this should make it
+        * possible to use SCReAM for low bitrate audio, with good results
+        */
+        ramp_up_speed = MIN(RAMP_UP_SPEED, stream->target_bitrate);
         if (stream->tx_size_bits_avg / MAX(br,stream->target_bitrate) > MAX_RTP_QUEUE_TIME &&
             time_us - stream->t_last_rtp_q_clear_us > 5 * MAX_RTP_QUEUE_TIME * 1000000) {
             GST_DEBUG("Target bitrate :  RTP queue delay ~ %f. Clear RTP queue \n",
@@ -962,11 +978,12 @@ static void update_target_stream_bitrate(GstScreamController *self, ScreamStream
             stream->clear_queue(stream->id, stream->user_data);
             stream->t_last_rtp_q_clear_us = time_us;
         } else if (self->in_fast_start && (tx_size_bits / stream->target_bitrate < 0.1)) {
+            increment = 0.0f;
             /*
             * Increment scale factor, rate can increase from min to max
             * in kRampUpTime if no congestion is detected
             */
-            increment = RAMP_UP_SPEED * (RATE_ADJUST_INTERVAL/1000000.0) *
+            increment = ramp_up_speed * (RATE_ADJUST_INTERVAL/1000000.0) *
                 (1.0f - MIN(1.0f, self->owd_trend /0.2f * tmp));
             /*
             * Limit increase rate near the last known highest bitrate
@@ -984,9 +1001,17 @@ static void update_target_stream_bitrate(GstScreamController *self, ScreamStream
             stream->target_bitrate *= 1.0f - OWD_GUARD * self->owd_trend * priority_scale * tmp;
             stream->was_fast_start = TRUE;
         } else {
+            increment = 0.0f;
             if (stream->was_fast_start) {
                 stream->was_fast_start = FALSE;
-                stream->target_bitrate_i = stream->target_bitrate;
+                if (time_us - stream->last_target_bitrate_i_adjust_us > 5000000) {
+                   /*
+                   * Avoid that target_bitrate_i is set too low in cases where a '
+                   * congestion event is prolonged
+                   */
+                   stream->target_bitrate_i = stream->rate_acked;
+                   stream->last_target_bitrate_i_adjust_us = time_us;
+                }
             }
             /*
             * scl is an an adaptive scaling to prevent overshoot
@@ -1006,7 +1031,14 @@ static void update_target_stream_bitrate(GstScreamController *self, ScreamStream
             if (increment < 0) {
                 if (stream->was_fast_start) {
                     stream->was_fast_start = FALSE;
-                    stream->target_bitrate_i = stream->target_bitrate;
+                    if (time_us - stream->last_target_bitrate_i_adjust_us > 5000000) {
+                       /*
+                       * Avoid that target_bitrate_i is set too low in cases where a '
+                       * congestion event is prolonged
+                       */
+                       stream->target_bitrate_i = stream->rate_acked;
+                       stream->last_target_bitrate_i_adjust_us = time_us;
+                    }
                 }
                 /*
                 * Minimize the risk that reverse path congestion
@@ -1022,7 +1054,7 @@ static void update_target_stream_bitrate(GstScreamController *self, ScreamStream
                     * This limitation is not in effect if competing flows are detected
                     */
                     increment *= scl_i;
-                    increment = MIN(increment,(gfloat)(RAMP_UP_SPEED*(RATE_ADJUST_INTERVAL/1000000.0)));
+                    increment = MIN(increment,(gfloat)(ramp_up_speed*(RATE_ADJUST_INTERVAL/1000000.0)));
                 }
             }
             stream->target_bitrate += increment;
@@ -1056,9 +1088,11 @@ static void update_target_stream_bitrate(GstScreamController *self, ScreamStream
     if (self->n_acc_bytes_in_flight_max > 0) {
         in_fl = self->acc_bytes_in_flight_max/self->n_acc_bytes_in_flight_max;
     }
+
     GST_INFO("Target br adj : "
-            "target(actual)=%4.0f(%4.0f,%4.0f,%4.0f)k rtpQ=%4.0fms cwnd=%5u(%5u) srtt=%3.0fms "
+            "T=%7.3fs target(actual)=%4.0f(%4.0f,%4.0f,%4.0f)k rtpQ=%4.0fms cwnd=%5u(%5u) srtt=%3.0fms "
             "owd(T)=%3.0f(%3.0f)ms fs=%u dt=%3.0f\n",
+            (time_us-stream->t_start_us)/1e6f,
             stream->target_bitrate/1000.0f,
             stream->rate_rtp/1000.0f,
             stream->rate_transmitted/1000.0f,
@@ -1179,6 +1213,7 @@ static void update_cwnd(GstScreamController *self, guint64 time_us)
     guint max_bytes_in_flight;
     gfloat th;
     gint n;
+    gboolean can_increase;
 
     tmp = estimate_owd(self, time_us) - get_base_owd(self);
 
@@ -1254,12 +1289,13 @@ static void update_cwnd(GstScreamController *self, guint64 time_us)
         self->in_fast_start = FALSE;
     }
     else {
-        /*
-        * Only allow CWND to increase if pipe is sufficiently filled or
-        * if congestion level is low
-        */
-        gfloat alpha = 1.25f+2.75f*(1.0f-self->owd_trend_mem);
-        if (self->cwnd <= alpha*bytes_in_flight(self)) {
+      /*
+      * Only allow CWND to increase if pipe is sufficiently filled or
+      * if congestion level is low
+      */
+      can_increase = FALSE;
+      gfloat alpha = 1.25f+2.75f*(1.0f-self->owd_trend_mem);
+      can_increase = self->cwnd <= alpha*bytes_in_flight(self);
             /*
             * Compute a scaling dependent on the relation between CWND and the inflection point
             * i.e the last known max value. This helps to reduce the CWND growth close to
@@ -1282,7 +1318,8 @@ static void update_cwnd(GstScreamController *self, guint64 time_us)
                 else if (self->n_fast_start > 1)
                     th = 0.1f;
                 if (self->owd_trend < th) {
-                    self->cwnd += MIN(10 * self->mss, (guint)(self->bytes_newly_acked * scl_i));
+                    if (can_increase)
+                        self->cwnd += MIN(10 * self->mss, (guint)(self->bytes_newly_acked * scl_i));
                 } else {
                     self->in_fast_start = FALSE;
                     self->last_congestion_detected_t_us = time_us;
@@ -1302,7 +1339,8 @@ static void update_cwnd(GstScreamController *self, guint64 time_us)
                     gain = CWND_GAIN_UP*(1.0f + MAX(0.0f, 1.0f - self->owd_trend / 0.2f));
                     gain *= scl_i;
 
-                    self->cwnd += (gint)(gain * off_target * self->bytes_newly_acked * self->mss / self->cwnd + 0.5f);
+                    if (can_increase)
+                        self->cwnd += (gint)(gain * off_target * self->bytes_newly_acked * self->mss / self->cwnd + 0.5f);
                 } else {
                     /*
                     * OWD above target
@@ -1315,7 +1353,6 @@ static void update_cwnd(GstScreamController *self, guint64 time_us)
                     self->last_congestion_detected_t_us = time_us;
                 }
             }
-        }
     }
 
     /*
@@ -1327,7 +1364,7 @@ static void update_cwnd(GstScreamController *self, guint64 time_us)
     max_bytes_in_flight_hi = MAX(self->bytes_in_flight_hi_max,
         get_max_bytes_in_flight(self, self->bytes_in_flight_hi_hist));
     max_bytes_in_flight = (guint)(max_bytes_in_flight_hi*(1.0-self->owd_trend_mem) + max_bytes_in_flight_lo*self->owd_trend_mem);
-    if (max_bytes_in_flight > 0) {
+    if (max_bytes_in_flight > INIT_CWND) {
         self->cwnd = MIN(self->cwnd, max_bytes_in_flight);
     }
 

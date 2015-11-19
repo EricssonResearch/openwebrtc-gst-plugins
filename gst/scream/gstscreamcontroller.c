@@ -36,43 +36,54 @@
 /* Timestamp sampling rate for SCReAM feedback*/
 #define TIMESTAMP_RATE 1000.0f
 
-// === A few switches to make debugging easier
-// Open a full congestion window
+/*
+ * A few switches to make debugging easier
+ * Open a full congestion window
+ */
 #define OPEN_CWND FALSE
 
-/* Some good to have features, SCReAM works also with these disabled
- * Enable shared bottleneck detection and OWD target adjustement
- * good if SCReAM needs to compete with e.g FTP but
- * Can in some cases cause self-inflicted congestion */
+/*
+* Some good to have features, SCReAM works also with these disabled
+* Enable shared bottleneck detection and OWD target adjustement
+* good if SCReAM needs to compete with e.g FTP but
+* Can in some cases cause self-inflicted congestion
+*/
 #define ENABLE_SBD TRUE
 /* Fast start can resume if little or no congestion detected */
 #define ENABLE_CONSECUTIVE_FAST_START TRUE
 /* Packet pacing reduces jitter */
 #define ENABLE_PACKET_PACING TRUE
 
-/* ==== Main tuning parameters (if tuning necessary) ==== */
-/* Most important parameters first */
-/* Typical frame period */
+/*
+* ==== Main tuning parameters (if tuning necessary) ====
+* Most important parameters first
+* Typical frame period
+*/
 #define FRAME_PERIOD 0.040f
 /* Max video rampup speed in bps/s (bits per second increase per second) */
 #define RAMP_UP_SPEED 200000.0f // bps/s
 /* CWND scale factor upon loss event */
 #define LOSS_BETA 0.6f
-/* Compensation factor for RTP queue size
- * A higher value such as 0.2 gives less jitter esp. in wireless (LTE)
- * but potentially also lower link utilization */
+/*
+* Compensation factor for RTP queue size
+* A higher value such as 0.2 gives less jitter esp. in wireless (LTE)
+* but potentially also lower link utilization
+*/
 #define TX_QUEUE_SIZE_FACTOR 1.0f
-/* Compensation factor for detected congestion in rate computation
- * A higher value such as 0.2 gives less jitter esp. in wireless (LTE)
- * but potentially also lower link utilization */
+/*
+* Compensation factor for detected congestion in rate computation
+* A higher value such as 0.2 gives less jitter esp. in wireless (LTE)
+* but potentially also lower link utilization
+*/
 #define OWD_GUARD 0.2f
 
 /* Video rate scaling due to loss events */
 #define LOSS_EVENT_RATE_SCALE 0.9f
 /* Additional send window slack (if no or little congestion detected)
- * An incrased value such as 0.5 can improve transmission of Key frames
- * however with a higher risk of unstable behavior in
- * sudden congestion situations */
+* An incrased value such as 0.5 can improve transmission of Key frames
+* however with a higher risk of unstable behavior in
+* sudden congestion situations
+*/
 #define BYTES_IN_FLIGHT_SLACK 0.0f
 /* Rate adjust interval */
 #define RATE_ADJUST_INTERVAL 200000 /* us */
@@ -99,8 +110,10 @@
 /* Max video rate estimation update period */
 #define RATE_UPDATE_INTERVAL 50000  /* us */
 
-/* When the queued time is > than MAX_RTP_QUEUE_TIME the queue time is emptied. This allow for faster
- * "catching up" when the throughput drops from a very high to a very low value */
+/*
+* When the queued time is > than MAX_RTP_QUEUE_TIME the queue time is emptied. This allow for faster
+* "catching up" when the throughput drops from a very high to a very low value
+*/
 #define MAX_RTP_QUEUE_TIME 0.5f
 
 GST_DEBUG_CATEGORY_EXTERN(gst_scream_queue_debug_category);
@@ -452,13 +465,9 @@ guint64 gst_scream_controller_packet_transmitted(GstScreamController *self, guin
     stream->bytes_transmitted += size;
 
     if (OPEN_CWND) {
-        //g_slice_free(TransmittedRtpPacket, packet);
         time_until_approve_transmits_us = 0;
         goto end;
     }
-
-    //self->transmitted_packets = g_list_append(self->transmitted_packets, packet);
-
     self->last_transmit_t_us = transmit_time_us;
 
     /*
@@ -484,18 +493,9 @@ guint64 gst_scream_controller_packet_transmitted(GstScreamController *self, guin
         pace_interval = MAX(MIN_PACE_INTERVAL, time_next_transmit_us);
     }
 
-
-    /*
-    * Update MSS and cwndMin
-    */
-    /*
-    self->mss = MAX(self->mss, size);
-    self->cwndMin = 2 * self->mss;
-    */
     /*
     * Determine when next RTP packet can be transmitted
     */
-
     time_until_approve_transmits_us = (guint64)(pace_interval * 1000000);
     self->next_transmit_t_us = transmit_time_us + time_until_approve_transmits_us;
 end:
@@ -1005,12 +1005,12 @@ static void update_target_stream_bitrate(GstScreamController *self, ScreamStream
             if (stream->was_fast_start) {
                 stream->was_fast_start = FALSE;
                 if (time_us - stream->last_target_bitrate_i_adjust_us > 5000000) {
-                   /*
-                   * Avoid that target_bitrate_i is set too low in cases where a '
-                   * congestion event is prolonged
-                   */
-                   stream->target_bitrate_i = stream->rate_acked;
-                   stream->last_target_bitrate_i_adjust_us = time_us;
+                    /*
+                    * Avoid that target_bitrate_i is set too low in cases where a '
+                    * congestion event is prolonged
+                    */
+                    stream->target_bitrate_i = stream->rate_acked;
+                    stream->last_target_bitrate_i_adjust_us = time_us;
                 }
             }
             /*
@@ -1032,12 +1032,12 @@ static void update_target_stream_bitrate(GstScreamController *self, ScreamStream
                 if (stream->was_fast_start) {
                     stream->was_fast_start = FALSE;
                     if (time_us - stream->last_target_bitrate_i_adjust_us > 5000000) {
-                       /*
-                       * Avoid that target_bitrate_i is set too low in cases where a '
-                       * congestion event is prolonged
-                       */
-                       stream->target_bitrate_i = stream->rate_acked;
-                       stream->last_target_bitrate_i_adjust_us = time_us;
+                        /*
+                        * Avoid that target_bitrate_i is set too low in cases where a '
+                        * congestion event is prolonged
+                        */
+                        stream->target_bitrate_i = stream->rate_acked;
+                        stream->last_target_bitrate_i_adjust_us = time_us;
                     }
                 }
                 /*

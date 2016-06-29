@@ -706,6 +706,7 @@ static guint64 get_gst_time_us(GstScreamQueue *self)
     clock = gst_element_get_clock(GST_ELEMENT(self));
     if (G_LIKELY(clock)) {
         time = gst_clock_get_time(clock);
+        gst_object_unref (clock);
     }
     return time / 1000;
 }

@@ -466,6 +466,7 @@ void gst_sctp_association_force_close(GstSctpAssociation *self)
 {
     g_mutex_lock(&self->association_mutex);
     if (self->sctp_ass_sock) {
+        usrsctp_shutdown (self->sctp_ass_sock, SHUT_RDWR);
         usrsctp_close(self->sctp_ass_sock);
         self->sctp_ass_sock = NULL;
     }

@@ -87,7 +87,6 @@ static GParamSpec *properties[NUM_PROPERTIES];
 
 static GHashTable *associations = NULL;
 G_LOCK_DEFINE_STATIC(associations_lock);
-static guint32 number_of_associations = 0;
 
 /* Interface implementations */
 static void gst_sctp_association_finalize(GObject *object);
@@ -157,7 +156,7 @@ static void gst_sctp_association_class_init (GstSctpAssociationClass *klass)
 static void gst_sctp_association_init (GstSctpAssociation *self)
 {
     /* No need to lock mutex here as long as the function is only called from gst_sctp_association_get */
-    if (number_of_associations == 0) {
+    if (g_hash_table_size(associations) == 0) {
         usrsctp_init(0, sctp_packet_out, g_print);
 
         usrsctp_sysctl_set_sctp_blackhole(2);
@@ -167,7 +166,6 @@ static void gst_sctp_association_init (GstSctpAssociation *self)
 
         usrsctp_sysctl_set_sctp_nr_outgoing_streams_default(DEFAULT_NUMBER_OF_SCTP_STREAMS);
     }
-    number_of_associations++;
 
     self->local_port = DEFAULT_LOCAL_SCTP_PORT;
     self->remote_port = DEFAULT_REMOTE_SCTP_PORT;
@@ -192,8 +190,7 @@ static void gst_sctp_association_finalize(GObject *object)
     g_hash_table_remove(associations, GUINT_TO_POINTER(self->association_id));
 
     usrsctp_deregister_address((void *) self);
-    number_of_associations--;
-    if (number_of_associations == 0) {
+    if (g_hash_table_size(associations) == 0) {
         usrsctp_finish();
     }
     G_UNLOCK(associations_lock);

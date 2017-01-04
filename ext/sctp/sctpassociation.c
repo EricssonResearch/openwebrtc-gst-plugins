@@ -86,6 +86,7 @@ static GParamSpec *properties[NUM_PROPERTIES];
 #define DEFAULT_REMOTE_SCTP_PORT 0
 
 static GHashTable *associations = NULL;
+static gboolean initialized = FALSE;
 G_LOCK_DEFINE_STATIC(associations_lock);
 
 /* Interface implementations */
@@ -156,8 +157,9 @@ static void gst_sctp_association_class_init (GstSctpAssociationClass *klass)
 static void gst_sctp_association_init (GstSctpAssociation *self)
 {
     /* No need to lock mutex here as long as the function is only called from gst_sctp_association_get */
-    if (g_hash_table_size(associations) == 0) {
+    if (!initialized) {
         usrsctp_init(0, sctp_packet_out, g_print);
+        initialized = TRUE;
 
         usrsctp_sysctl_set_sctp_blackhole(2);
 
@@ -191,7 +193,8 @@ static void gst_sctp_association_finalize(GObject *object)
 
     usrsctp_deregister_address((void *) self);
     if (g_hash_table_size(associations) == 0) {
-        usrsctp_finish();
+        if (usrsctp_finish() == 0)
+          initialized = FALSE;
     }
     G_UNLOCK(associations_lock);
 

@@ -83,7 +83,7 @@ jniutils_get_created_vm()
 {
     JNIU_LOGVERB(LOGPREFIX "ENTER %s", __FUNCTION__);
 
-    const char* runtimeLibStr[] = {JNIU_ANDROID_RUNTIME_DALVIK_LIB_STR, JNIU_ANDROID_RUNTIME_ART_LIB_STR};
+    const char* runtimeLibStr[] = {NULL, JNIU_ANDROID_RUNTIME_DALVIK_LIB_STR, JNIU_ANDROID_RUNTIME_ART_LIB_STR};
     const int nLibs = JNIU_NELEM(runtimeLibStr);
 
     JavaVM* pVm = NULL;

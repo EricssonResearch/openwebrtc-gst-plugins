@@ -34,7 +34,7 @@
 GST_DEBUG_CATEGORY_STATIC(gst_sctp_enc_debug_category);
 #define GST_CAT_DEFAULT gst_sctp_enc_debug_category
 
-#define gst_sctp_enc_parent_class parent_class
+#define parent_class gst_sctp_enc_parent_class
 G_DEFINE_TYPE(GstSctpEnc, gst_sctp_enc, GST_TYPE_ELEMENT);
 
 static GstStaticPadTemplate sink_template = GST_STATIC_PAD_TEMPLATE("sink_%u", GST_PAD_SINK,

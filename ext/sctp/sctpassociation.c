@@ -81,7 +81,7 @@ enum {
 static guint signals[LAST_SIGNAL] = { 0 };
 static GParamSpec *properties[NUM_PROPERTIES];
 
-#define DEFAULT_NUMBER_OF_SCTP_STREAMS 10
+#define MAX_SCTP_SID UINT16_MAX
 #define DEFAULT_LOCAL_SCTP_PORT 0
 #define DEFAULT_REMOTE_SCTP_PORT 0
 
@@ -166,7 +166,7 @@ static void gst_sctp_association_init (GstSctpAssociation *self)
         /* Explicit Congestion Notification */
         usrsctp_sysctl_set_sctp_ecn_enable(0);
 
-        usrsctp_sysctl_set_sctp_nr_outgoing_streams_default(DEFAULT_NUMBER_OF_SCTP_STREAMS);
+        usrsctp_sysctl_set_sctp_nr_outgoing_streams_default(MAX_SCTP_SID);
     }
 
     self->local_port = DEFAULT_LOCAL_SCTP_PORT;

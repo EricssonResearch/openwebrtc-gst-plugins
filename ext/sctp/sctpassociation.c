@@ -466,6 +466,7 @@ void gst_sctp_association_force_close(GstSctpAssociation *self)
 {
     g_mutex_lock(&self->association_mutex);
     if (self->sctp_ass_sock) {
+        usrsctp_set_ulpinfo(self->sctp_ass_sock, NULL);
         usrsctp_shutdown (self->sctp_ass_sock, SHUT_RDWR);
         usrsctp_close(self->sctp_ass_sock);
         self->sctp_ass_sock = NULL;
@@ -627,10 +628,16 @@ error:
 
 static int sctp_packet_out(void *addr, void* buffer, size_t length, guint8 tos, guint8 set_df)
 {
-    GstSctpAssociation *self = GST_SCTP_ASSOCIATION(addr);
+    GstSctpAssociation *self;
 
-    if (self->packet_out_cb) {
+    if (!GST_SCTP_IS_ASSOCIATION (addr)) {
+      g_warning("No sctp association to manage out packet");
+    } else {
+      self = GST_SCTP_ASSOCIATION(addr);
+
+      if (self->packet_out_cb) {
         self->packet_out_cb(self, buffer, length, self->packet_out_user_data);
+      }
     }
 
     return 0;
@@ -639,7 +646,14 @@ static int sctp_packet_out(void *addr, void* buffer, size_t length, guint8 tos, 
 static int receive_cb(struct socket *sock, union sctp_sockstore addr, void *data, size_t datalen,
     struct sctp_rcvinfo rcv_info, gint flags, void *ulp_info)
 {
-    GstSctpAssociation *self = GST_SCTP_ASSOCIATION(ulp_info);
+    GstSctpAssociation *self;
+
+    if (!GST_SCTP_ASSOCIATION (ulp_info)) {
+      g_warning("No asctp association to manage data buffer");
+      return 1;
+    }
+
+    self = GST_SCTP_ASSOCIATION(ulp_info);
 
     if (!data) {
         /* Not sure if this can happend. */

@@ -52,7 +52,11 @@ struct _GstSctpSendMeta {
 };
 
 GType gst_sctp_send_meta_api_get_type(void);
+
+GST_EXPORT
 const GstMetaInfo * gst_sctp_send_meta_get_info(void);
+
+GST_EXPORT
 GstSctpSendMeta * gst_sctp_buffer_add_send_meta(GstBuffer *buffer, guint32 ppid, gboolean ordered,
     GstSctpSendMetaPartiallyReliability pr, guint32 pr_param);
 

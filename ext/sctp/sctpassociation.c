@@ -203,6 +203,8 @@ static void gst_sctp_association_finalize(GObject *object)
       self->connection_thread = NULL;
     }
 
+    g_mutex_clear(&self->association_mutex);
+
     G_OBJECT_CLASS(gst_sctp_association_parent_class)->finalize(object);
 }
 

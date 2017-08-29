@@ -443,7 +443,8 @@ static void gst_sctp_enc_srcpad_loop(GstPad *pad)
         self->need_segment = FALSE;
     }
 
-    if (gst_data_queue_pop(self->outbound_sctp_packet_queue, &item)) {
+    if (!gst_data_queue_is_empty(self->outbound_sctp_packet_queue)
+      && gst_data_queue_pop(self->outbound_sctp_packet_queue, &item)) {
         flow_ret = gst_pad_push(self->src_pad, GST_BUFFER(item->object));
         item->object = NULL;
 

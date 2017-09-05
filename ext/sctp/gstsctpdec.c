@@ -259,17 +259,23 @@ static GstStateChangeReturn gst_sctp_dec_change_state(GstElement *element,
     switch (transition) {
     case GST_STATE_CHANGE_READY_TO_PAUSED:
         if (!configure_association(self))
-            ret = GST_STATE_CHANGE_FAILURE;
+            return GST_STATE_CHANGE_FAILURE;
         break;
+    default:
+        break;
+    }
+
+    ret = GST_ELEMENT_CLASS(parent_class)->change_state(element, transition);
+    if (ret == GST_STATE_CHANGE_FAILURE)
+      return ret;
+
+    switch (transition) {
     case GST_STATE_CHANGE_PAUSED_TO_READY:
         sctpdec_cleanup(self);
         break;
     default:
         break;
     }
-
-    if (ret != GST_STATE_CHANGE_FAILURE)
-        ret = GST_ELEMENT_CLASS(parent_class)->change_state(element, transition);
 
     return ret;
 }

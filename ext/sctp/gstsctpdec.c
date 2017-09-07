@@ -443,6 +443,30 @@ static gboolean copy_sticky_events(GstPad *pad, GstEvent **event, gpointer user_
     return TRUE;
 }
 
+static gboolean
+gst_sctp_dec_src_activate_mode (GstPad * pad, GstObject * parent,
+    GstPadMode mode, gboolean active)
+{
+  GstSctpDec *self = GST_SCTP_DEC(parent);
+  gboolean ret = FALSE;
+
+  switch (mode) {
+    case GST_PAD_MODE_PUSH:
+      if (active) {
+        gst_pad_start_task(pad, (GstTaskFunction)gst_sctp_data_srcpad_loop, pad, NULL);
+      } else {
+        stop_srcpad_task (pad);
+      }
+      ret = TRUE;
+      GST_DEBUG_OBJECT (self, "activate_mode: active %d, ret %d", active, ret);
+      break;
+    default:
+      break;
+  }
+
+  return ret;
+}
+
 static GstPad *get_pad_for_stream_id(GstSctpDec *self, guint16 stream_id)
 {
     GstPad *new_pad = NULL;
@@ -471,6 +495,7 @@ static GstPad *get_pad_for_stream_id(GstSctpDec *self, guint16 stream_id)
     gst_object_unref(template);
 
     gst_pad_set_event_function(new_pad, GST_DEBUG_FUNCPTR((GstPadEventFunction) gst_sctp_dec_src_event));
+    gst_pad_set_activatemode_function (new_pad, GST_DEBUG_FUNCPTR (gst_sctp_dec_src_activate_mode));
 
     if (!gst_pad_set_active(new_pad, TRUE))
         goto error_cleanup_pad;
@@ -478,12 +503,11 @@ static GstPad *get_pad_for_stream_id(GstSctpDec *self, guint16 stream_id)
     pad_stream_id = gst_pad_create_stream_id_printf (new_pad, GST_ELEMENT(self), "%hu", stream_id);
     gst_pad_push_event(new_pad, gst_event_new_stream_start(pad_stream_id));
     g_free(pad_stream_id);
+
     gst_pad_sticky_events_foreach(self->sink_pad, copy_sticky_events, new_pad);
 
     if (!gst_element_add_pad(GST_ELEMENT(self), new_pad))
         goto error_cleanup_pad;
-
-    gst_pad_start_task(new_pad, (GstTaskFunction)gst_sctp_data_srcpad_loop, new_pad, NULL);
 
     gst_object_ref(new_pad);
 

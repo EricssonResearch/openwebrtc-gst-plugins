@@ -247,8 +247,10 @@ gst_sctp_enc_src_activate_mode (GstPad * pad, GstObject * parent,
             (GstTaskFunction)gst_sctp_enc_srcpad_loop, self->src_pad, NULL);
         ret = configure_association(self);
       } else {
+        gst_data_queue_set_flushing(self->outbound_sctp_packet_queue, TRUE);
+        gst_data_queue_flush(self->outbound_sctp_packet_queue);
         sctpenc_cleanup(self);
-	ret = TRUE;
+        ret = TRUE;
       }
       GST_DEBUG_OBJECT (self, "activate_mode: active %d, ret %d", active, ret);
       break;
@@ -443,8 +445,7 @@ static void gst_sctp_enc_srcpad_loop(GstPad *pad)
         self->need_segment = FALSE;
     }
 
-    if (!gst_data_queue_is_empty(self->outbound_sctp_packet_queue)
-      && gst_data_queue_pop(self->outbound_sctp_packet_queue, &item)) {
+    if (gst_data_queue_pop(self->outbound_sctp_packet_queue, &item)) {
         flow_ret = gst_pad_push(self->src_pad, GST_BUFFER(item->object));
         item->object = NULL;
 

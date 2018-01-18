@@ -32,6 +32,7 @@
 #include <string.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <inttypes.h>
 
 #define GST_SCTP_ASSOCIATION_STATE_TYPE (gst_sctp_association_state_get_type())
 static GType gst_sctp_association_state_get_type(void)

@@ -87,7 +87,7 @@ static GParamSpec *properties[NUM_PROPERTIES];
 #define DEFAULT_REMOTE_SCTP_PORT 0
 
 static GHashTable *associations = NULL;
-static gboolean initialized = FALSE;
+static gint sctp_init_refcount = 1;
 G_LOCK_DEFINE_STATIC(associations_lock);
 
 /* Interface implementations */
@@ -158,9 +158,9 @@ static void gst_sctp_association_class_init (GstSctpAssociationClass *klass)
 static void gst_sctp_association_init (GstSctpAssociation *self)
 {
     /* No need to lock mutex here as long as the function is only called from gst_sctp_association_get */
-    if (!initialized) {
+
+    if (g_atomic_int_get (&sctp_init_refcount) == 1) {
         usrsctp_init(0, sctp_packet_out, g_print);
-        initialized = TRUE;
 
         usrsctp_sysctl_set_sctp_blackhole(2);
 
@@ -169,6 +169,7 @@ static void gst_sctp_association_init (GstSctpAssociation *self)
 
         usrsctp_sysctl_set_sctp_nr_outgoing_streams_default(MAX_SCTP_SID);
     }
+    g_atomic_int_inc (&sctp_init_refcount);
 
     self->local_port = DEFAULT_LOCAL_SCTP_PORT;
     self->remote_port = DEFAULT_REMOTE_SCTP_PORT;
@@ -194,8 +195,17 @@ static void gst_sctp_association_finalize(GObject *object)
 
     usrsctp_deregister_address((void *) self);
     if (g_hash_table_size(associations) == 0) {
-        if (usrsctp_finish() == 0)
-          initialized = FALSE;
+        if (g_atomic_int_dec_and_test (&sctp_init_refcount)) {
+            /* FIXME: usrsctp_finish() is non-determinitstic,
+             * but there's no way except for waiting zero-return.
+             *
+             * Refer to https://github.com/sctplab/usrsctp/pull/229#issuecomment-390887885
+             */
+            while (usrsctp_finish() != 0) {
+                g_usleep (1000);   
+                g_warning ("SCTP stack may not be torn down, try again");
+            }
+        }
     }
     G_UNLOCK(associations_lock);
 

@@ -31,6 +31,7 @@
 
 #include <string.h>
 #include <errno.h>
+#include <stdint.h>
 #include <stdlib.h>
 
 #define GST_SCTP_ASSOCIATION_STATE_TYPE (gst_sctp_association_state_get_type())
